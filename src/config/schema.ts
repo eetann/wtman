@@ -48,7 +48,7 @@ export type Config = v.InferOutput<typeof ConfigSchema>;
 // Default configuration
 export const DEFAULT_CONFIG: Config = {
   worktree: {
-    path: "../${{ original.name }}-${{ branch }}",
+    path: "../${{ original.basename }}-${{ branch }}",
     separator: "hyphen",
   },
   "pre-worktree-add": [],
