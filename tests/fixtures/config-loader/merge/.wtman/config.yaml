@@ -1,0 +1,7 @@
+worktree:
+  path: "../team-${{ branch }}"
+  separator: hyphen
+
+post-worktree-add:
+  - name: Team step
+    run: echo team

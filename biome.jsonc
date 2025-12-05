@@ -15,7 +15,11 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "suspicious": {
+        // ${{ }} is wtman's template syntax, not JavaScript template literal
+        "noTemplateCurlyInString": "off"
+      }
     }
   },
   "javascript": {

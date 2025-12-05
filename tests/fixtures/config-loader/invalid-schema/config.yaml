@@ -1,0 +1,5 @@
+worktree:
+  separator: invalid-value
+
+post-worktree-add:
+  - run: bun install

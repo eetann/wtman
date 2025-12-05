@@ -1,0 +1,6 @@
+worktree:
+  separator: underscore
+
+post-worktree-add:
+  - name: User step
+    run: echo user

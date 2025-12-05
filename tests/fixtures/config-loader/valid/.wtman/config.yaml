@@ -1,0 +1,7 @@
+worktree:
+  path: "../${{ original.name }}-${{ branch }}"
+  separator: hyphen
+
+post-worktree-add:
+  - name: Install dependencies
+    run: bun install
