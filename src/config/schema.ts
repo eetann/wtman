@@ -6,7 +6,7 @@ export type Separator = v.InferOutput<typeof SeparatorSchema>;
 
 // Worktree settings
 export const WorktreeSettingsSchema = v.object({
-  path: v.optional(v.string()),
+  template: v.optional(v.string()),
   separator: v.optional(SeparatorSchema),
 });
 export type WorktreeSettings = v.InferOutput<typeof WorktreeSettingsSchema>;
@@ -35,7 +35,7 @@ export type RawConfig = v.InferOutput<typeof RawConfigSchema>;
 // Config schema (after merge, required fields)
 export const ConfigSchema = v.object({
   worktree: v.object({
-    path: v.string(),
+    template: v.string(),
     separator: SeparatorSchema,
   }),
   "pre-worktree-add": v.array(HookStepSchema),
@@ -48,7 +48,7 @@ export type Config = v.InferOutput<typeof ConfigSchema>;
 // Default configuration
 export const DEFAULT_CONFIG: Config = {
   worktree: {
-    path: "../${{ original.basename }}-${{ branch }}",
+    template: "../${{ original.basename }}-${{ worktree.branch }}",
     separator: "hyphen",
   },
   "pre-worktree-add": [],

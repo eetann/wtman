@@ -1,5 +1,5 @@
 worktree:
-  path: "../team-${{ branch }}"
+  template: "../team-${{ worktree.branch }}"
   separator: hyphen
 
 post-worktree-add:

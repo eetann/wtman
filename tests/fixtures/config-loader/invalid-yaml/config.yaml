@@ -1,5 +1,5 @@
 worktree:
-  path: "../${{ original.basename }}-${{ branch }}"
+  path: "../${{ original.basename }}-${{ worktree.branch }}"
   separator: hyphen
   invalid: [
     unclosed array

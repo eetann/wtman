@@ -30,7 +30,7 @@ Configuration files are stored in the `.wtman/` directory:
 
 ```yaml
 worktree:
-  path: "<path template>"
+  template: "<path template>"
   separator: "<separator type>"
 
 pre-worktree-add:
@@ -54,25 +54,27 @@ post-worktree-remove:
 
 The `worktree` section controls where worktrees are created and how branch names are transformed into directory names.
 
-### Path Template
+### Template
 
-The `path` option defines where worktrees will be created. You can use template variables:
+The `template` option defines where worktrees will be created. You can use template variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `${{ original.path }}` | Full path to the main repository | `/path/to/foo` |
 | `${{ original.basename }}` | Directory name of the main repository | `foo` |
-| `${{ branch }}` | Transformed branch name | `feature-add-cart` |
+| `${{ worktree.branch }}` | Branch name (separator conversion applied) | `feature-add-cart` |
 
-#### Path Examples
+> **Note**: In the template, `${{ worktree.branch }}` is automatically transformed using the `separator` setting.
+
+#### Template Examples
 
 | Use Case | Configuration | Result (branch: `feature/add-cart`) |
 |----------|---------------|-------------------------------------|
-| Inside project | `path: "./worktrees/${{ branch }}"` | `./worktrees/feature-add-cart` |
-| Sibling with repo name prefix | `path: "../${{ original.basename }}-${{ branch }}"` | `../foo-feature-add-cart` |
-| Sibling with custom prefix | `path: "../awesome-${{ branch }}"` | `../awesome-feature-add-cart` |
-| Dedicated sibling directory | `path: "../worktrees/${{ branch }}"` | `../worktrees/feature-add-cart` |
-| Absolute path | `path: "/another/path/${{ branch }}"` | `/another/path/feature-add-cart` |
+| Inside project | `template: "./worktrees/${{ worktree.branch }}"` | `./worktrees/feature-add-cart` |
+| Sibling with repo name prefix | `template: "../${{ original.basename }}-${{ worktree.branch }}"` | `../foo-feature-add-cart` |
+| Sibling with custom prefix | `template: "../awesome-${{ worktree.branch }}"` | `../awesome-feature-add-cart` |
+| Dedicated sibling directory | `template: "../worktrees/${{ worktree.branch }}"` | `../worktrees/feature-add-cart` |
+| Absolute path | `template: "/another/path/${{ worktree.branch }}"` | `/another/path/feature-add-cart` |
 
 ### Branch Name Separator
 
@@ -89,13 +91,13 @@ The `separator` option controls how `/` characters in branch names are transform
 ```yaml
 # .wtman/config.yaml
 worktree:
-  path: "../${{ original.basename }}-${{ branch }}"
+  template: "../${{ original.basename }}-${{ worktree.branch }}"
   separator: hyphen
 ```
 
 ```yaml
 # .wtman/config.user.yaml
-# Override only the separator, inherit path from config.yaml
+# Override only the separator, inherit template from config.yaml
 worktree:
   separator: underscore
 ```
@@ -159,25 +161,26 @@ Each step must have exactly one action (`run`, `copy`, `link`, `mkdir`, or `remo
 
 You can use GitHub Actions-style variables with the `${{ }}` syntax.
 
-#### Variables for Worktree Settings
+#### Common Variables
 
-These variables are available in the `worktree.path` template:
+These variables are available in both `worktree.template` and hooks:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `${{ original.path }}` | Full path to the main repository | `/path/to/foo` |
 | `${{ original.basename }}` | Directory name of the main repository | `foo` |
-| `${{ branch }}` | Transformed branch name (after separator conversion) | `feature-add-cart` |
+| `${{ worktree.branch }}` | Branch name | `feature/add-cart` |
 
-#### Variables for Hooks
+> **Note**: In `worktree.template`, `${{ worktree.branch }}` is automatically transformed using the `separator` setting (e.g., `feature/add-cart` → `feature-add-cart`). In hooks, it remains the raw branch name.
 
-These variables are available in hook commands:
+#### Hook-Only Variables
+
+These variables are only available in hooks (determined after worktree creation):
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `${{ original.path }}` | Path to the original (main) repository | `/path/to/foo` |
 | `${{ worktree.path }}` | Path to the worktree directory | `/path/to/foo-feature-add-cart` |
-| `${{ worktree.branch }}` | Branch name of the worktree (raw, not transformed) | `feature/add-cart` |
+| `${{ worktree.basename }}` | Directory name of the worktree | `foo-feature-add-cart` |
 
 ## Merging Behavior
 
@@ -189,12 +192,12 @@ Configuration files are loaded in the following order:
 
 ### Worktree Settings (Override)
 
-The `worktree` section uses **override** merging. Each property (`path`, `separator`) is individually overridden by later configuration files.
+The `worktree` section uses **override** merging. Each property (`template`, `separator`) is individually overridden by later configuration files.
 
 ```yaml
 # config.yaml
 worktree:
-  path: "../${{ original.basename }}-${{ branch }}"
+  template: "../${{ original.basename }}-${{ worktree.branch }}"
   separator: hyphen
 
 # config.user.yaml
@@ -202,8 +205,8 @@ worktree:
   separator: underscore  # Only separator is overridden
 
 # Result:
-#   path: "../${{ original.basename }}-${{ branch }}"  (from config.yaml)
-#   separator: underscore                           (from config.user.yaml)
+#   template: "../${{ original.basename }}-${{ worktree.branch }}"  (from config.yaml)
+#   separator: underscore                                           (from config.user.yaml)
 ```
 
 ### Hooks (Concatenate)
@@ -217,7 +220,7 @@ Hooks are **concatenated** from all files. For example, if `config.yaml` defines
 ```yaml
 # .wtman/config.yaml
 worktree:
-  path: "../${{ original.basename }}-${{ branch }}"
+  template: "../${{ original.basename }}-${{ worktree.branch }}"
   separator: hyphen
 
 pre-worktree-add:

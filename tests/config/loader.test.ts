@@ -16,8 +16,8 @@ describe("loadSingleConfig", () => {
 			join(fixturesPath, "valid/.wtman/config.yaml"),
 		);
 		expect(result).toBeDefined();
-		expect(result?.worktree?.path).toBe(
-			"../${{ original.basename }}-${{ branch }}",
+		expect(result?.worktree?.template).toBe(
+			"../${{ original.basename }}-${{ worktree.branch }}",
 		);
 		expect(result?.worktree?.separator).toBe("hyphen");
 		expect(result?.["post-worktree-add"]?.[0]?.name).toBe(
@@ -48,24 +48,24 @@ describe("loadSingleConfig", () => {
 describe("mergeWorktreeSettings", () => {
 	test("later config overrides earlier config", () => {
 		const result = mergeWorktreeSettings([
-			{ worktree: { path: "../base-${{ branch }}", separator: "hyphen" } },
+			{ worktree: { template: "../base-${{ worktree.branch }}", separator: "hyphen" } },
 			{
 				worktree: {
-					path: "../override-${{ branch }}",
+					template: "../override-${{ worktree.branch }}",
 					separator: "underscore",
 				},
 			},
 		]);
-		expect(result.path).toBe("../override-${{ branch }}");
+		expect(result.template).toBe("../override-${{ worktree.branch }}");
 		expect(result.separator).toBe("underscore");
 	});
 
 	test("keeps earlier values when later config has partial definition", () => {
 		const result = mergeWorktreeSettings([
-			{ worktree: { path: "../base-${{ branch }}", separator: "hyphen" } },
+			{ worktree: { template: "../base-${{ worktree.branch }}", separator: "hyphen" } },
 			{ worktree: { separator: "underscore" } },
 		]);
-		expect(result.path).toBe("../base-${{ branch }}");
+		expect(result.template).toBe("../base-${{ worktree.branch }}");
 		expect(result.separator).toBe("underscore");
 	});
 });
@@ -110,7 +110,7 @@ describe("loadConfig", () => {
 			cwd: join(fixturesPath, "valid"),
 			mainTreePath: join(fixturesPath, "valid"),
 		});
-		expect(result.worktree.path).toBe("../${{ original.basename }}-${{ branch }}");
+		expect(result.worktree.template).toBe("../${{ original.basename }}-${{ worktree.branch }}");
 		expect(result.worktree.separator).toBe("hyphen");
 		expect(result["post-worktree-add"]).toHaveLength(1);
 		expect(result["post-worktree-add"][0]?.name).toBe("Install dependencies");
@@ -121,8 +121,8 @@ describe("loadConfig", () => {
 			cwd: join(fixturesPath, "merge"),
 			mainTreePath: join(fixturesPath, "merge"),
 		});
-		// worktree.path comes from config.yaml, separator overridden by user.yaml
-		expect(result.worktree.path).toBe("../team-${{ branch }}");
+		// worktree.template comes from config.yaml, separator overridden by user.yaml
+		expect(result.worktree.template).toBe("../team-${{ worktree.branch }}");
 		expect(result.worktree.separator).toBe("underscore");
 		// hooks are concatenated
 		expect(result["post-worktree-add"]).toHaveLength(2);

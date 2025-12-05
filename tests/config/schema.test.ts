@@ -25,10 +25,10 @@ describe("SeparatorSchema", () => {
 describe("WorktreeSettingsSchema", () => {
 	test("accepts valid settings", () => {
 		const result = v.parse(WorktreeSettingsSchema, {
-			path: "../${{ original.basename }}-${{ branch }}",
+			template: "../${{ original.basename }}-${{ worktree.branch }}",
 			separator: "hyphen",
 		});
-		expect(result.path).toBe("../${{ original.basename }}-${{ branch }}");
+		expect(result.template).toBe("../${{ original.basename }}-${{ worktree.branch }}");
 		expect(result.separator).toBe("hyphen");
 	});
 });
@@ -74,7 +74,7 @@ describe("RawConfigSchema", () => {
 	test("accepts complete config", () => {
 		const result = v.parse(RawConfigSchema, {
 			worktree: {
-				path: "../${{ original.basename }}-${{ branch }}",
+				template: "../${{ original.basename }}-${{ worktree.branch }}",
 				separator: "hyphen",
 			},
 			"pre-worktree-add": [{ name: "Pre add", run: "echo pre" }],
@@ -84,7 +84,7 @@ describe("RawConfigSchema", () => {
 				{ name: "Post remove", run: "echo post remove" },
 			],
 		});
-		expect(result.worktree?.path).toBe("../${{ original.basename }}-${{ branch }}");
+		expect(result.worktree?.template).toBe("../${{ original.basename }}-${{ worktree.branch }}");
 		expect(result["post-worktree-add"]?.[0]?.name).toBe("Post add");
 	});
 
@@ -99,7 +99,7 @@ describe("ConfigSchema", () => {
 	test("accepts merged config", () => {
 		const result = v.parse(ConfigSchema, {
 			worktree: {
-				path: "../${{ original.basename }}-${{ branch }}",
+				template: "../${{ original.basename }}-${{ worktree.branch }}",
 				separator: "hyphen",
 			},
 			"pre-worktree-add": [],
@@ -107,11 +107,11 @@ describe("ConfigSchema", () => {
 			"pre-worktree-remove": [],
 			"post-worktree-remove": [],
 		});
-		expect(result.worktree.path).toBe("../${{ original.basename }}-${{ branch }}");
+		expect(result.worktree.template).toBe("../${{ original.basename }}-${{ worktree.branch }}");
 		expect(result.worktree.separator).toBe("hyphen");
 	});
 
-	test("rejects when worktree.path is missing", () => {
+	test("rejects when worktree.template is missing", () => {
 		expect(() =>
 			v.parse(ConfigSchema, {
 				worktree: {

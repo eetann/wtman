@@ -1,5 +1,5 @@
 worktree:
-  path: "../${{ original.basename }}-${{ branch }}"
+  template: "../${{ original.basename }}-${{ worktree.branch }}"
   separator: hyphen
 
 post-worktree-add:
