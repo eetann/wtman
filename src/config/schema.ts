@@ -4,10 +4,15 @@ import * as v from "valibot";
 export const SeparatorSchema = v.picklist(["hyphen", "underscore", "slash"]);
 export type Separator = v.InferOutput<typeof SeparatorSchema>;
 
+// Delete branch behavior type
+export const DeleteBranchSchema = v.picklist(["ask", "always", "never"]);
+export type DeleteBranch = v.InferOutput<typeof DeleteBranchSchema>;
+
 // Worktree settings
 export const WorktreeSettingsSchema = v.object({
   template: v.optional(v.string()),
   separator: v.optional(SeparatorSchema),
+  deleteBranch: v.optional(DeleteBranchSchema),
 });
 export type WorktreeSettings = v.InferOutput<typeof WorktreeSettingsSchema>;
 
@@ -37,6 +42,7 @@ export const ConfigSchema = v.object({
   worktree: v.object({
     template: v.string(),
     separator: SeparatorSchema,
+    deleteBranch: DeleteBranchSchema,
   }),
   "pre-worktree-add": v.array(HookStepSchema),
   "post-worktree-add": v.array(HookStepSchema),
@@ -50,6 +56,7 @@ export const DEFAULT_CONFIG: Config = {
   worktree: {
     template: "../${{ original.basename }}-${{ worktree.branch }}",
     separator: "hyphen",
+    deleteBranch: "ask",
   },
   "pre-worktree-add": [],
   "post-worktree-add": [],

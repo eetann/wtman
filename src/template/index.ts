@@ -1,7 +1,7 @@
-export type { WorktreeTemplateContext, HookContext } from "./expander";
+export type { HookContext, WorktreeTemplateContext } from "./expander";
 export {
-	transformBranch,
-	expandTemplate,
-	expandWorktreeTemplate,
-	expandHookCommand,
+  expandHookCommand,
+  expandTemplate,
+  expandWorktreeTemplate,
+  transformBranch,
 } from "./expander";
