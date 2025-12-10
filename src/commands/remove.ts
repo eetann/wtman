@@ -1,19 +1,189 @@
-import { confirm } from "@inquirer/prompts";
+import { normalize, relative } from "node:path";
+import { confirm, select } from "@inquirer/prompts";
 import { define } from "gunshi";
 import { loadConfig } from "../config";
 import {
   deleteBranch,
-  getCurrentWorktreeInfo,
   getMainTreePath,
+  getWorktreeByName,
   hasUncommittedChanges,
   hasUnpushedCommits,
-  isMainWorktree,
+  listWorktrees,
   removeWorktree,
+  type WorktreeInfo,
 } from "../git";
+
+/**
+ * Get target worktree by name or through interactive selection.
+ */
+async function getTargetWorktree(
+  worktreeName: string | undefined,
+  worktrees: WorktreeInfo[],
+  mainTreePath: string,
+  currentDir: string,
+  force: boolean,
+): Promise<WorktreeInfo> {
+  if (worktreeName) {
+    // Name specified: find worktree by name
+    const found = getWorktreeByName(worktreeName, worktrees);
+    if (!found) {
+      console.error(`Worktree not found: ${worktreeName}`);
+      process.exit(1);
+    }
+
+    // Check if it's the main worktree
+    if (normalize(found.path) === normalize(mainTreePath)) {
+      console.error("Cannot remove main worktree");
+      process.exit(1);
+    }
+
+    // Check if it's the current directory
+    if (normalize(found.path) === currentDir) {
+      console.error("Cannot remove the worktree you are currently in.");
+      console.error("Please move to another directory first, then run:");
+      console.error(`  wtman remove ${found.branch || worktreeName}`);
+      process.exit(1);
+    }
+
+    return found;
+  }
+
+  // No name specified: interactive selection
+  // Filter out main worktree and current directory
+  const removableWorktrees = worktrees.filter((wt) => {
+    const isMain = normalize(wt.path) === normalize(mainTreePath);
+    const isCurrent = normalize(wt.path) === currentDir;
+    return !isMain && !isCurrent;
+  });
+
+  if (removableWorktrees.length === 0) {
+    console.log("No removable worktrees available.");
+    process.exit(0);
+  }
+
+  // Build choices for select
+  const choices = removableWorktrees.map((wt) => {
+    const relativePath = relative(mainTreePath, wt.path);
+    const label = wt.branch ? `${relativePath} [${wt.branch}]` : relativePath;
+    return {
+      name: label,
+      value: wt,
+    };
+  });
+
+  const selected = await select({
+    message: "Select worktree to remove:",
+    choices,
+  });
+
+  // Confirm removal (skip if --force)
+  if (!force) {
+    const relativePath = relative(mainTreePath, selected.path);
+    const label = selected.branch
+      ? `${relativePath} [${selected.branch}]`
+      : relativePath;
+    const proceed = await confirm({
+      message: `Remove worktree "${label}"?`,
+      default: true,
+    });
+    if (!proceed) {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+  }
+
+  return selected;
+}
+
+/**
+ * Check for uncommitted changes and unpushed commits.
+ * Prompts user for confirmation if issues are found (unless force is true).
+ */
+async function checkSafetyAndConfirm(
+  worktreePath: string,
+  force: boolean,
+): Promise<void> {
+  if (force) return;
+
+  if (hasUncommittedChanges(worktreePath)) {
+    const proceed = await confirm({
+      message: "The worktree has uncommitted changes. Proceed anyway?",
+      default: false,
+    });
+    if (!proceed) {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+  }
+
+  if (hasUnpushedCommits(worktreePath)) {
+    const proceed = await confirm({
+      message: "The worktree has unpushed commits. Proceed anyway?",
+      default: false,
+    });
+    if (!proceed) {
+      console.log("Aborted.");
+      process.exit(0);
+    }
+  }
+}
+
+/**
+ * Handle branch deletion based on options and config.
+ */
+async function handleBranchDeletion(
+  branch: string,
+  force: boolean,
+  deleteBranchOption: boolean,
+  keepBranchOption: boolean,
+  mainTreePath: string,
+): Promise<void> {
+  if (!branch) return;
+
+  let shouldDelete = false;
+
+  if (deleteBranchOption) {
+    shouldDelete = true;
+  } else if (keepBranchOption) {
+    shouldDelete = false;
+  } else {
+    const config = await loadConfig();
+    const deleteBranchConfig = config.worktree.deleteBranch;
+
+    if (deleteBranchConfig === "always") {
+      shouldDelete = true;
+    } else if (deleteBranchConfig === "never") {
+      shouldDelete = false;
+    } else {
+      // "ask" - default behavior
+      if (force) {
+        shouldDelete = true;
+      } else {
+        shouldDelete = await confirm({
+          message: `Delete branch "${branch}"?`,
+          default: true,
+        });
+      }
+    }
+  }
+
+  if (shouldDelete) {
+    try {
+      deleteBranch(branch, force, mainTreePath);
+      console.log(`Deleted branch: ${branch}`);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error(`Warning: Failed to delete branch: ${error.message}`);
+      } else {
+        console.error("Warning: Failed to delete branch");
+      }
+    }
+  }
+}
 
 export const removeCommand = define({
   name: "remove",
-  description: "Remove the current worktree",
+  description: "Remove a worktree by name or interactively select one",
   args: {
     force: {
       type: "boolean",
@@ -31,54 +201,32 @@ export const removeCommand = define({
     },
   },
   async run(ctx) {
+    // Get worktree name from positional argument (optional)
+    const worktreeName = ctx.positionals[1] as string | undefined;
     const force = ctx.values.force ?? false;
     const deleteBranchOption = ctx.values["delete-branch"] ?? false;
     const keepBranchOption = ctx.values["keep-branch"] ?? false;
 
-    // Check if current directory is main worktree
-    if (isMainWorktree()) {
-      console.error("Cannot remove main worktree");
-      process.exit(1);
-    }
-
-    // Get current worktree info
-    const worktreeInfo = getCurrentWorktreeInfo();
-    const { path: worktreePath, branch } = worktreeInfo;
-
-    // Safety checks (skip if --force)
-    if (!force) {
-      // Check for uncommitted changes
-      if (hasUncommittedChanges()) {
-        const proceed = await confirm({
-          message: "You have uncommitted changes. Proceed anyway?",
-          default: false,
-        });
-        if (!proceed) {
-          console.log("Aborted.");
-          process.exit(0);
-        }
-      }
-
-      // Check for unpushed commits
-      if (hasUnpushedCommits()) {
-        const proceed = await confirm({
-          message: "You have unpushed commits. Proceed anyway?",
-          default: false,
-        });
-        if (!proceed) {
-          console.log("Aborted.");
-          process.exit(0);
-        }
-      }
-    }
-
-    // Move to main worktree before removal
+    const worktrees = listWorktrees();
     const mainTreePath = getMainTreePath();
-    process.chdir(mainTreePath);
+    const currentDir = normalize(process.cwd());
+
+    // Get target worktree (by name or interactive selection)
+    const targetWorktree = await getTargetWorktree(
+      worktreeName,
+      worktrees,
+      mainTreePath,
+      currentDir,
+      force,
+    );
+    const { path: worktreePath, branch } = targetWorktree;
+
+    // Safety checks
+    await checkSafetyAndConfirm(worktreePath, force);
 
     // Remove worktree
     try {
-      removeWorktree(worktreePath, force);
+      removeWorktree(worktreePath, force, mainTreePath);
       console.log(`Removed worktree: ${worktreePath}`);
     } catch (error) {
       if (error instanceof Error) {
@@ -89,49 +237,13 @@ export const removeCommand = define({
       process.exit(1);
     }
 
-    // Determine if we should delete the branch
-    let shouldDeleteBranch = false;
-
-    if (deleteBranchOption) {
-      shouldDeleteBranch = true;
-    } else if (keepBranchOption) {
-      shouldDeleteBranch = false;
-    } else {
-      // Check config
-      const config = await loadConfig();
-      const deleteBranchConfig = config.worktree.deleteBranch;
-
-      if (deleteBranchConfig === "always") {
-        shouldDeleteBranch = true;
-      } else if (deleteBranchConfig === "never") {
-        shouldDeleteBranch = false;
-      } else {
-        // "ask" - default behavior
-        if (force) {
-          // With --force, default to deleting branch
-          shouldDeleteBranch = true;
-        } else {
-          shouldDeleteBranch = await confirm({
-            message: `Delete branch "${branch}"?`,
-            default: true,
-          });
-        }
-      }
-    }
-
-    // Delete branch if requested
-    if (shouldDeleteBranch && branch) {
-      try {
-        deleteBranch(branch, force);
-        console.log(`Deleted branch: ${branch}`);
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error(`Warning: Failed to delete branch: ${error.message}`);
-        } else {
-          console.error("Warning: Failed to delete branch");
-        }
-        // Don't exit with error - branch deletion failure is not critical
-      }
-    }
+    // Handle branch deletion
+    await handleBranchDeletion(
+      branch,
+      force,
+      deleteBranchOption,
+      keepBranchOption,
+      mainTreePath,
+    );
   },
 });

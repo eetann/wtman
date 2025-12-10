@@ -101,12 +101,12 @@ describe("wtman remove command", () => {
     }
   });
 
-  test("removes worktree when executed inside worktree with --force --delete-branch", async () => {
+  test("removes worktree by name with --force --delete-branch", async () => {
     // Create a worktree
     const { worktreePath, branch } = createWorktree(testDir, "test-branch-1");
 
-    // Move to worktree
-    process.chdir(worktreePath);
+    // Stay in main worktree (not the worktree being deleted)
+    process.chdir(testDir);
 
     // Mock console.log to capture output
     const logs: string[] = [];
@@ -116,7 +116,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli(["--force", "--delete-branch"], removeCommand, {
+      await cli([branch, "--force", "--delete-branch"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -138,9 +138,15 @@ describe("wtman remove command", () => {
     }
   });
 
-  test("fails when executed in main worktree", async () => {
-    // Move to main worktree
+  test("fails when trying to remove main worktree by name", async () => {
+    // Stay in main worktree
     process.chdir(testDir);
+
+    // Get the main branch name (main or master)
+    const mainBranch = execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: testDir,
+      encoding: "utf-8",
+    }).trim();
 
     // Mock console.error to capture error output
     const errors: string[] = [];
@@ -158,7 +164,7 @@ describe("wtman remove command", () => {
     }) as never;
 
     try {
-      await cli(["--force"], removeCommand, {
+      await cli([mainBranch, "--force"], removeCommand, {
         name: "wtman remove",
       });
     } catch {
@@ -179,8 +185,8 @@ describe("wtman remove command", () => {
     // Create a worktree
     const { worktreePath, branch } = createWorktree(testDir, "test-branch-2");
 
-    // Move to worktree
-    process.chdir(worktreePath);
+    // Stay in main worktree
+    process.chdir(testDir);
 
     // Mock console.log to capture output
     const logs: string[] = [];
@@ -190,7 +196,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli(["--force", "--keep-branch"], removeCommand, {
+      await cli([branch, "--force", "--keep-branch"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -225,8 +231,8 @@ describe("wtman remove command", () => {
     // Create a worktree
     const { worktreePath, branch } = createWorktree(testDir, "test-branch-3");
 
-    // Move to worktree
-    process.chdir(worktreePath);
+    // Stay in main worktree
+    process.chdir(testDir);
 
     // Mock console.log to capture output
     const logs: string[] = [];
@@ -236,7 +242,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli(["--force"], removeCommand, {
+      await cli([branch, "--force"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -276,8 +282,8 @@ describe("wtman remove command", () => {
     // Create a worktree
     const { worktreePath, branch } = createWorktree(testDir, "test-branch-4");
 
-    // Move to worktree
-    process.chdir(worktreePath);
+    // Stay in main worktree
+    process.chdir(testDir);
 
     // Mock console.log to capture output
     const logs: string[] = [];
@@ -287,7 +293,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli(["--force"], removeCommand, {
+      await cli([branch, "--force"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -314,5 +320,89 @@ describe("wtman remove command", () => {
         'worktree:\n  template: "../worktrees/${{ worktree.branch }}"\n  separator: hyphen\n  deleteBranch: ask\n',
       );
     }
+  });
+
+  test("fails when non-existing worktree name is specified", async () => {
+    // Stay in main worktree
+    process.chdir(testDir);
+
+    // Mock console.error to capture error output
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = mock((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+
+    // Mock process.exit to prevent actual exit
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = mock((code?: number) => {
+      exitCode = code;
+      throw new Error("process.exit called");
+    }) as never;
+
+    try {
+      await cli(["non-existing-branch", "--force"], removeCommand, {
+        name: "wtman remove",
+      });
+    } catch {
+      // Expected to throw due to mocked process.exit
+    } finally {
+      console.error = originalError;
+      process.exit = originalExit;
+    }
+
+    // Verify error message
+    expect(errors.some((err) => err.includes("Worktree not found:"))).toBe(
+      true,
+    );
+    expect(exitCode).toBe(1);
+  });
+
+  test("fails when trying to remove current directory worktree", async () => {
+    // Create a worktree
+    const { worktreePath, branch } = createWorktree(testDir, "test-branch-5");
+
+    // Move to the worktree
+    process.chdir(worktreePath);
+
+    // Mock console.error to capture error output
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = mock((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+
+    // Mock process.exit to prevent actual exit
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = mock((code?: number) => {
+      exitCode = code;
+      throw new Error("process.exit called");
+    }) as never;
+
+    try {
+      await cli([branch, "--force"], removeCommand, {
+        name: "wtman remove",
+      });
+    } catch {
+      // Expected to throw due to mocked process.exit
+    } finally {
+      console.error = originalError;
+      process.exit = originalExit;
+      // Move back to main worktree for cleanup
+      process.chdir(testDir);
+    }
+
+    // Verify error message
+    expect(
+      errors.some((err) =>
+        err.includes("Cannot remove the worktree you are currently in"),
+      ),
+    ).toBe(true);
+    expect(exitCode).toBe(1);
+
+    // Verify worktree still exists
+    expect(existsSync(worktreePath)).toBe(true);
   });
 });

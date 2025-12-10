@@ -2,7 +2,7 @@ import {
   type ExecSyncOptionsWithStringEncoding,
   execSync,
 } from "node:child_process";
-import { dirname, normalize, resolve } from "node:path";
+import { basename, dirname, normalize, resolve } from "node:path";
 
 /**
  * Get the absolute path of the main worktree.
@@ -101,22 +101,22 @@ export interface WorktreeInfo {
 }
 
 /**
- * Get information about the current worktree.
+ * List all worktrees in the repository.
  * @param cwd - Optional working directory (defaults to process.cwd())
- * @returns Object containing path and branch of the current worktree
+ * @returns Array of worktree information
  */
-export function getCurrentWorktreeInfo(cwd?: string): WorktreeInfo {
-  const currentDir = normalize(cwd ?? process.cwd());
+export function listWorktrees(cwd?: string): WorktreeInfo[] {
   const options: ExecSyncOptionsWithStringEncoding = {
     encoding: "utf-8",
-    cwd: currentDir,
+    cwd: cwd ?? process.cwd(),
   };
 
   const output = execSync("git worktree list --porcelain", options).trim();
-  const worktrees = output.split("\n\n");
+  const worktreeBlocks = output.split("\n\n");
+  const worktrees: WorktreeInfo[] = [];
 
-  for (const worktree of worktrees) {
-    const lines = worktree.split("\n");
+  for (const block of worktreeBlocks) {
+    const lines = block.split("\n");
     let path = "";
     let branch = "";
 
@@ -128,12 +128,57 @@ export function getCurrentWorktreeInfo(cwd?: string): WorktreeInfo {
       }
     }
 
-    if (normalize(path) === currentDir) {
-      return { path, branch };
+    if (path) {
+      worktrees.push({ path, branch });
+    }
+  }
+
+  return worktrees;
+}
+
+/**
+ * Get information about the current worktree.
+ * @param worktrees - Pre-fetched worktree list from listWorktrees()
+ * @param cwd - Optional working directory (defaults to process.cwd())
+ * @returns Object containing path and branch of the current worktree
+ */
+export function getCurrentWorktreeInfo(
+  worktrees: WorktreeInfo[],
+  cwd?: string,
+): WorktreeInfo {
+  const currentDir = normalize(cwd ?? process.cwd());
+
+  for (const worktree of worktrees) {
+    if (normalize(worktree.path) === currentDir) {
+      return worktree;
     }
   }
 
   throw new Error("Current directory is not a git worktree");
+}
+
+/**
+ * Get worktree by name (branch name or path basename).
+ * @param name - The name to search for (branch name or path basename)
+ * @param worktrees - Pre-fetched worktree list from listWorktrees()
+ * @returns Worktree info if found, undefined otherwise
+ */
+export function getWorktreeByName(
+  name: string,
+  worktrees: WorktreeInfo[],
+): WorktreeInfo | undefined {
+  for (const worktree of worktrees) {
+    // Match by branch name
+    if (worktree.branch === name) {
+      return worktree;
+    }
+    // Match by path basename
+    if (basename(worktree.path) === name) {
+      return worktree;
+    }
+  }
+
+  return undefined;
 }
 
 /**
