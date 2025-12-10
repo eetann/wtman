@@ -74,6 +74,9 @@ async function getTargetWorktree(
   const selected = await select({
     message: "Select worktree to remove:",
     choices,
+    theme: {
+      keybindings: ["vim", "emacs"],
+    },
   });
 
   // Confirm removal (skip if --force)
