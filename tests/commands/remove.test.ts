@@ -116,7 +116,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli([branch, "--force", "--delete-branch"], removeCommand, {
+      await cli(["-w", branch, "--force", "--delete-branch"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -164,7 +164,7 @@ describe("wtman remove command", () => {
     }) as never;
 
     try {
-      await cli([mainBranch, "--force"], removeCommand, {
+      await cli(["-w", mainBranch, "--force"], removeCommand, {
         name: "wtman remove",
       });
     } catch {
@@ -196,7 +196,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli([branch, "--force", "--keep-branch"], removeCommand, {
+      await cli(["-w", branch, "--force", "--keep-branch"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -242,7 +242,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli([branch, "--force"], removeCommand, {
+      await cli(["-w", branch, "--force"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -293,7 +293,7 @@ describe("wtman remove command", () => {
     });
 
     try {
-      await cli([branch, "--force"], removeCommand, {
+      await cli(["-w", branch, "--force"], removeCommand, {
         name: "wtman remove",
       });
 
@@ -342,7 +342,7 @@ describe("wtman remove command", () => {
     }) as never;
 
     try {
-      await cli(["non-existing-branch", "--force"], removeCommand, {
+      await cli(["-w", "non-existing-branch", "--force"], removeCommand, {
         name: "wtman remove",
       });
     } catch {
@@ -382,7 +382,7 @@ describe("wtman remove command", () => {
     }) as never;
 
     try {
-      await cli([branch, "--force"], removeCommand, {
+      await cli(["-w", branch, "--force"], removeCommand, {
         name: "wtman remove",
       });
     } catch {

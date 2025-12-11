@@ -5,6 +5,7 @@
     "": {
       "name": "wtman",
       "dependencies": {
+        "@inquirer/core": "^11.0.2",
         "@inquirer/prompts": "^8.0.2",
         "confbox": "^0.2.2",
         "defu": "^6.1.4",

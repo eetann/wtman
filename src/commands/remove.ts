@@ -12,6 +12,7 @@ import {
   removeWorktree,
   type WorktreeInfo,
 } from "../git";
+import { spinner } from "../spinner";
 
 /**
  * Get target worktree by name or through interactive selection.
@@ -171,15 +172,19 @@ async function handleBranchDeletion(
   }
 
   if (shouldDelete) {
-    try {
-      deleteBranch(branch, force, mainTreePath);
+    const deleteResult = await spinner({
+      message: `Deleting branch "${branch}"...`,
+      task: async () => {
+        await deleteBranch(branch, force, mainTreePath);
+      },
+    });
+
+    if (!deleteResult.success) {
+      console.error(
+        `Warning: Failed to delete branch: ${deleteResult.error?.message ?? "Unknown error"}`,
+      );
+    } else {
       console.log(`Deleted branch: ${branch}`);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(`Warning: Failed to delete branch: ${error.message}`);
-      } else {
-        console.error("Warning: Failed to delete branch");
-      }
     }
   }
 }
@@ -188,6 +193,11 @@ export const removeCommand = define({
   name: "remove",
   description: "Remove a worktree by name or interactively select one",
   args: {
+    "worktree-path": {
+      type: "string",
+      short: "w",
+      description: "Path of the worktree to remove",
+    },
     force: {
       type: "boolean",
       description: "Force removal without confirmation",
@@ -204,8 +214,7 @@ export const removeCommand = define({
     },
   },
   async run(ctx) {
-    // Get worktree name from positional argument (optional)
-    const worktreeName = ctx.positionals[1] as string | undefined;
+    const ctxWorktreePath = ctx.values["worktree-path"];
     const force = ctx.values.force ?? false;
     const deleteBranchOption = ctx.values["delete-branch"] ?? false;
     const keepBranchOption = ctx.values["keep-branch"] ?? false;
@@ -216,7 +225,7 @@ export const removeCommand = define({
 
     // Get target worktree (by name or interactive selection)
     const targetWorktree = await getTargetWorktree(
-      worktreeName,
+      ctxWorktreePath,
       worktrees,
       mainTreePath,
       currentDir,
@@ -227,18 +236,21 @@ export const removeCommand = define({
     // Safety checks
     await checkSafetyAndConfirm(worktreePath, force);
 
-    // Remove worktree
-    try {
-      removeWorktree(worktreePath, force, mainTreePath);
-      console.log(`Removed worktree: ${worktreePath}`);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(`Failed to remove worktree: ${error.message}`);
-      } else {
-        console.error("Failed to remove worktree");
-      }
+    // Remove worktree with spinner
+    const removeResult = await spinner({
+      message: "Removing worktree...",
+      task: async () => {
+        await removeWorktree(worktreePath, force, mainTreePath);
+      },
+    });
+
+    if (!removeResult.success) {
+      console.error(
+        `Failed to remove worktree: ${removeResult.error?.message ?? "Unknown error"}`,
+      );
       process.exit(1);
     }
+    console.log(`Removed worktree: ${worktreePath}`);
 
     // Handle branch deletion
     await handleBranchDeletion(

@@ -1,8 +1,12 @@
 import {
   type ExecSyncOptionsWithStringEncoding,
+  exec,
   execSync,
 } from "node:child_process";
 import { basename, dirname, normalize, resolve } from "node:path";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
 
 /**
  * Get the absolute path of the main worktree.
@@ -231,21 +235,15 @@ export function hasUnpushedCommits(cwd?: string): boolean {
  * @param force - If true, force removal even with uncommitted changes
  * @param cwd - Optional working directory (defaults to process.cwd())
  */
-export function removeWorktree(
+export async function removeWorktree(
   worktreePath: string,
   force?: boolean,
   cwd?: string,
-): void {
-  const options: ExecSyncOptionsWithStringEncoding = {
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  };
-  if (cwd) {
-    options.cwd = cwd;
-  }
-
+): Promise<void> {
   const forceFlag = force ? " --force" : "";
-  execSync(`git worktree remove "${worktreePath}"${forceFlag}`, options);
+  await execAsync(`git worktree remove "${worktreePath}"${forceFlag}`, {
+    cwd: cwd ?? process.cwd(),
+  });
 }
 
 /**
@@ -254,19 +252,13 @@ export function removeWorktree(
  * @param force - If true, use -D to force delete even if not fully merged
  * @param cwd - Optional working directory (defaults to process.cwd())
  */
-export function deleteBranch(
+export async function deleteBranch(
   branch: string,
   force?: boolean,
   cwd?: string,
-): void {
-  const options: ExecSyncOptionsWithStringEncoding = {
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  };
-  if (cwd) {
-    options.cwd = cwd;
-  }
-
+): Promise<void> {
   const deleteFlag = force ? "-D" : "-d";
-  execSync(`git branch ${deleteFlag} "${branch}"`, options);
+  await execAsync(`git branch ${deleteFlag} "${branch}"`, {
+    cwd: cwd ?? process.cwd(),
+  });
 }
