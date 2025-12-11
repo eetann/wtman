@@ -5,7 +5,8 @@ import { loadConfig } from "../config";
 import {
   deleteBranch,
   getMainTreePath,
-  getWorktreeByName,
+  getWorktreeByBranchName,
+  getWorktreeByPath,
   hasUncommittedChanges,
   hasUnpushedCommits,
   listWorktrees,
@@ -15,20 +16,21 @@ import {
 import { spinner } from "../spinner";
 
 /**
- * Get target worktree by name or through interactive selection.
+ * Get target worktree by branch name, path, or through interactive selection.
  */
 async function getTargetWorktree(
-  worktreeName: string | undefined,
+  branchName: string | undefined,
+  worktreePath: string | undefined,
   worktrees: WorktreeInfo[],
   mainTreePath: string,
   currentDir: string,
   force: boolean,
 ): Promise<WorktreeInfo> {
-  if (worktreeName) {
-    // Name specified: find worktree by name
-    const found = getWorktreeByName(worktreeName, worktrees);
+  if (branchName) {
+    // Branch name specified: find worktree by branch name
+    const found = getWorktreeByBranchName(branchName, worktrees);
     if (!found) {
-      console.error(`Worktree not found: ${worktreeName}`);
+      console.error(`Worktree not found for branch: ${branchName}`);
       process.exit(1);
     }
 
@@ -42,7 +44,32 @@ async function getTargetWorktree(
     if (normalize(found.path) === currentDir) {
       console.error("Cannot remove the worktree you are currently in.");
       console.error("Please move to another directory first, then run:");
-      console.error(`  wtman remove ${found.branch || worktreeName}`);
+      console.error(`  wtman remove -b ${branchName}`);
+      process.exit(1);
+    }
+
+    return found;
+  }
+
+  if (worktreePath) {
+    // Path specified: find worktree by path
+    const found = getWorktreeByPath(worktreePath, worktrees);
+    if (!found) {
+      console.error(`Worktree not found: ${worktreePath}`);
+      process.exit(1);
+    }
+
+    // Check if it's the main worktree
+    if (normalize(found.path) === normalize(mainTreePath)) {
+      console.error("Cannot remove main worktree");
+      process.exit(1);
+    }
+
+    // Check if it's the current directory
+    if (normalize(found.path) === currentDir) {
+      console.error("Cannot remove the worktree you are currently in.");
+      console.error("Please move to another directory first, then run:");
+      console.error(`  wtman remove -w ${worktreePath}`);
       process.exit(1);
     }
 
@@ -192,11 +219,34 @@ async function handleBranchDeletion(
 export const removeCommand = define({
   name: "remove",
   description: "Remove a worktree by name or interactively select one",
+  examples: `
+# Remove worktree by branch name
+wtman remove -b feature/my-branch
+
+# Remove worktree by branch name with force and delete branch
+wtman remove -b feature/my-branch --force --delete-branch
+
+# Remove worktree by path (full path)
+wtman remove -w /path/to/worktree
+
+# Remove worktree by path (basename)
+wtman remove -w my-worktree --force
+
+# Interactive selection (no options)
+wtman remove
+`.trim(),
   args: {
+    "branch-name": {
+      type: "string",
+      short: "b",
+      description: "Branch name of the worktree to remove",
+      conflicts: "worktree-path",
+    },
     "worktree-path": {
       type: "string",
       short: "w",
-      description: "Path of the worktree to remove",
+      description: "Path of the worktree to remove (full path or basename)",
+      conflicts: "branch-name",
     },
     force: {
       type: "boolean",
@@ -214,6 +264,7 @@ export const removeCommand = define({
     },
   },
   async run(ctx) {
+    const ctxBranchName = ctx.values["branch-name"];
     const ctxWorktreePath = ctx.values["worktree-path"];
     const force = ctx.values.force ?? false;
     const deleteBranchOption = ctx.values["delete-branch"] ?? false;
@@ -223,8 +274,9 @@ export const removeCommand = define({
     const mainTreePath = getMainTreePath();
     const currentDir = normalize(process.cwd());
 
-    // Get target worktree (by name or interactive selection)
+    // Get target worktree (by branch name, path, or interactive selection)
     const targetWorktree = await getTargetWorktree(
+      ctxBranchName,
       ctxWorktreePath,
       worktrees,
       mainTreePath,

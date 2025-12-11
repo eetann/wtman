@@ -162,26 +162,45 @@ export function getCurrentWorktreeInfo(
 }
 
 /**
- * Get worktree by name (branch name or path basename).
- * @param name - The name to search for (branch name or path basename)
+ * Get worktree by branch name.
+ * @param branchName - The branch name to search for
  * @param worktrees - Pre-fetched worktree list from listWorktrees()
  * @returns Worktree info if found, undefined otherwise
  */
-export function getWorktreeByName(
-  name: string,
+export function getWorktreeByBranchName(
+  branchName: string,
   worktrees: WorktreeInfo[],
 ): WorktreeInfo | undefined {
   for (const worktree of worktrees) {
-    // Match by branch name
-    if (worktree.branch === name) {
-      return worktree;
-    }
-    // Match by path basename
-    if (basename(worktree.path) === name) {
+    if (worktree.branch === branchName) {
       return worktree;
     }
   }
+  return undefined;
+}
 
+/**
+ * Get worktree by path (full path or basename).
+ * @param path - The path to search for (full path or basename)
+ * @param worktrees - Pre-fetched worktree list from listWorktrees()
+ * @returns Worktree info if found, undefined otherwise
+ */
+export function getWorktreeByPath(
+  path: string,
+  worktrees: WorktreeInfo[],
+): WorktreeInfo | undefined {
+  // First, try to match by full path
+  for (const worktree of worktrees) {
+    if (normalize(worktree.path) === normalize(path)) {
+      return worktree;
+    }
+  }
+  // If not found, try to match by basename
+  for (const worktree of worktrees) {
+    if (basename(worktree.path) === path) {
+      return worktree;
+    }
+  }
   return undefined;
 }
 

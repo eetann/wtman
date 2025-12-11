@@ -6,7 +6,8 @@ import { join, normalize } from "node:path";
 import {
   addWorktree,
   branchExists,
-  getWorktreeByName,
+  getWorktreeByBranchName,
+  getWorktreeByPath,
   listWorktrees,
 } from "../../src/git";
 
@@ -181,7 +182,7 @@ describe("listWorktrees", () => {
   });
 });
 
-describe("getWorktreeByName", () => {
+describe("getWorktreeByBranchName", () => {
   let testDir: string;
   let worktreePath: string;
 
@@ -212,7 +213,7 @@ describe("getWorktreeByName", () => {
 
   test("finds worktree by branch name", () => {
     const worktrees = listWorktrees(testDir);
-    const worktree = getWorktreeByName("feature/test-branch", worktrees);
+    const worktree = getWorktreeByBranchName("feature/test-branch", worktrees);
     expect(worktree).toBeDefined();
     // biome-ignore lint/style/noNonNullAssertion: in test
     expect(worktree!.branch).toBe("feature/test-branch");
@@ -222,9 +223,64 @@ describe("getWorktreeByName", () => {
     );
   });
 
-  test("returns undefined for non-existing name", () => {
+  test("returns undefined for non-existing branch name", () => {
     const worktrees = listWorktrees(testDir);
-    const worktree = getWorktreeByName("non-existing-branch", worktrees);
+    const worktree = getWorktreeByBranchName("non-existing-branch", worktrees);
+    expect(worktree).toBeUndefined();
+  });
+});
+
+describe("getWorktreeByPath", () => {
+  let testDir: string;
+  let worktreePath: string;
+
+  beforeAll(() => {
+    // Create a temporary directory for testing
+    testDir = mkdtempSync(join(tmpdir(), "wtman-test-"));
+    // Initialize a git repository
+    execSync("git init", { cwd: testDir });
+    execSync("git config user.email 'test@example.com'", { cwd: testDir });
+    execSync("git config user.name 'Test User'", { cwd: testDir });
+    // Create an initial commit
+    execSync("touch README.md", { cwd: testDir });
+    execSync("git add .", { cwd: testDir });
+    execSync("git commit -m 'initial commit'", { cwd: testDir });
+    // Create a worktree
+    worktreePath = join(testDir, "..", "feature-worktree");
+    execSync(`git worktree add "${worktreePath}" -b feature/test-branch`, {
+      cwd: testDir,
+    });
+  });
+
+  afterAll(() => {
+    // Clean up worktree first
+    execSync(`git worktree remove "${worktreePath}"`, { cwd: testDir });
+    // Clean up the temporary directory
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  test("finds worktree by full path", () => {
+    const worktrees = listWorktrees(testDir);
+    const realWorktreePath = realpathSync(worktreePath);
+    const worktree = getWorktreeByPath(realWorktreePath, worktrees);
+    expect(worktree).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: in test
+    expect(worktree!.branch).toBe("feature/test-branch");
+    // biome-ignore lint/style/noNonNullAssertion: in test
+    expect(normalize(worktree!.path)).toBe(normalize(realWorktreePath));
+  });
+
+  test("finds worktree by basename", () => {
+    const worktrees = listWorktrees(testDir);
+    const worktree = getWorktreeByPath("feature-worktree", worktrees);
+    expect(worktree).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: in test
+    expect(worktree!.branch).toBe("feature/test-branch");
+  });
+
+  test("returns undefined for non-existing path", () => {
+    const worktrees = listWorktrees(testDir);
+    const worktree = getWorktreeByPath("/non/existing/path", worktrees);
     expect(worktree).toBeUndefined();
   });
 });
