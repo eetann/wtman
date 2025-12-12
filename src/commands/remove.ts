@@ -1,4 +1,4 @@
-import { normalize, relative } from "node:path";
+import { basename, normalize, relative } from "node:path";
 import { confirm, select } from "@inquirer/prompts";
 import { define } from "gunshi";
 import { loadConfig } from "../config";
@@ -13,7 +13,9 @@ import {
   removeWorktree,
   type WorktreeInfo,
 } from "../git";
+import { executeHooks } from "../hooks";
 import { spinner } from "../spinner";
+import type { HookContext } from "../template/expander";
 
 /**
  * Get target worktree by branch name, path, or through interactive selection.
@@ -288,6 +290,38 @@ wtman remove
     // Safety checks
     await checkSafetyAndConfirm(worktreePath, force);
 
+    // Load config for hooks
+    const config = await loadConfig();
+
+    // Build hook context
+    const hookContext: HookContext = {
+      original: {
+        path: mainTreePath,
+        basename: basename(mainTreePath),
+      },
+      worktree: {
+        path: worktreePath,
+        basename: basename(worktreePath),
+        branch,
+      },
+    };
+
+    // Execute pre-worktree-remove hooks
+    if (config["pre-worktree-remove"].length > 0) {
+      const preResult = await executeHooks({
+        hookType: "pre-worktree-remove",
+        steps: config["pre-worktree-remove"],
+        context: hookContext,
+      });
+
+      if (!preResult.success) {
+        console.error(
+          `Hook failed at step "${preResult.failedStep}": ${preResult.error?.message ?? "Unknown error"}`,
+        );
+        process.exit(1);
+      }
+    }
+
     // Remove worktree with spinner
     const removeResult = await spinner({
       message: "Removing worktree...",
@@ -303,6 +337,22 @@ wtman remove
       process.exit(1);
     }
     console.log(`Removed worktree: ${worktreePath}`);
+
+    // Execute post-worktree-remove hooks
+    if (config["post-worktree-remove"].length > 0) {
+      const postResult = await executeHooks({
+        hookType: "post-worktree-remove",
+        steps: config["post-worktree-remove"],
+        context: hookContext,
+      });
+
+      if (!postResult.success) {
+        console.error(
+          `Hook failed at step "${postResult.failedStep}": ${postResult.error?.message ?? "Unknown error"}`,
+        );
+        process.exit(1);
+      }
+    }
 
     // Handle branch deletion
     await handleBranchDeletion(

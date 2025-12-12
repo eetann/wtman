@@ -1,9 +1,11 @@
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import { define } from "gunshi";
 import { loadConfig } from "../config";
 import { addWorktree, getMainTreePath } from "../git";
+import { executeHooks } from "../hooks";
 import {
   expandWorktreeTemplate,
+  type HookContext,
   type WorktreeTemplateContext,
 } from "../template";
 
@@ -44,6 +46,39 @@ export const addCommand = define({
       config.worktree.separator,
     );
 
+    // Resolve absolute path for worktree
+    const worktreeAbsolutePath = resolve(mainTreePath, worktreePath);
+
+    // Build pre-hook context (worktree.path/basename not available yet)
+    // For pre-worktree-add, we use the expected path even though worktree doesn't exist yet
+    const preHookContext: HookContext = {
+      original: {
+        path: mainTreePath,
+        basename: basename(mainTreePath),
+      },
+      worktree: {
+        path: worktreeAbsolutePath,
+        basename: basename(worktreeAbsolutePath),
+        branch,
+      },
+    };
+
+    // Execute pre-worktree-add hooks
+    if (config["pre-worktree-add"].length > 0) {
+      const preResult = await executeHooks({
+        hookType: "pre-worktree-add",
+        steps: config["pre-worktree-add"],
+        context: preHookContext,
+      });
+
+      if (!preResult.success) {
+        console.error(
+          `Hook failed at step "${preResult.failedStep}": ${preResult.error?.message ?? "Unknown error"}`,
+        );
+        process.exit(1);
+      }
+    }
+
     try {
       // Create worktree (execute from main repo directory)
       addWorktree(worktreePath, branch, mainTreePath);
@@ -55,6 +90,35 @@ export const addCommand = define({
         console.error("Failed to create worktree");
       }
       process.exit(1);
+    }
+
+    // Build post-hook context (worktree now exists)
+    const postHookContext: HookContext = {
+      original: {
+        path: mainTreePath,
+        basename: basename(mainTreePath),
+      },
+      worktree: {
+        path: worktreeAbsolutePath,
+        basename: basename(worktreeAbsolutePath),
+        branch,
+      },
+    };
+
+    // Execute post-worktree-add hooks
+    if (config["post-worktree-add"].length > 0) {
+      const postResult = await executeHooks({
+        hookType: "post-worktree-add",
+        steps: config["post-worktree-add"],
+        context: postHookContext,
+      });
+
+      if (!postResult.success) {
+        console.error(
+          `Hook failed at step "${postResult.failedStep}": ${postResult.error?.message ?? "Unknown error"}`,
+        );
+        process.exit(1);
+      }
     }
   },
 });

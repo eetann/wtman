@@ -20,6 +20,7 @@ export type WorktreeSettings = v.InferOutput<typeof WorktreeSettingsSchema>;
 export const HookStepSchema = v.object({
   name: v.string(),
   run: v.optional(v.string()),
+  "working-directory": v.optional(v.string()),
   copy: v.optional(v.union([v.string(), v.array(v.string())])),
   link: v.optional(v.union([v.string(), v.array(v.string())])),
   mkdir: v.optional(v.union([v.string(), v.array(v.string())])),
