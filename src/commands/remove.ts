@@ -131,12 +131,15 @@ async function getTargetWorktree(
 /**
  * Check for uncommitted changes and unpushed commits.
  * Prompts user for confirmation if issues are found (unless force is true).
+ * Returns true if force mode should be used (either already forced or user confirmed).
  */
 async function checkSafetyAndConfirm(
   worktreePath: string,
   force: boolean,
-): Promise<void> {
-  if (force) return;
+): Promise<boolean> {
+  if (force) return true;
+
+  let shouldForce = false;
 
   if (hasUncommittedChanges(worktreePath)) {
     const proceed = await confirm({
@@ -147,6 +150,7 @@ async function checkSafetyAndConfirm(
       console.log("Aborted.");
       process.exit(0);
     }
+    shouldForce = true;
   }
 
   if (hasUnpushedCommits(worktreePath)) {
@@ -158,7 +162,10 @@ async function checkSafetyAndConfirm(
       console.log("Aborted.");
       process.exit(0);
     }
+    shouldForce = true;
   }
+
+  return shouldForce;
 }
 
 /**
@@ -287,8 +294,8 @@ wtman remove
     );
     const { path: worktreePath, branch } = targetWorktree;
 
-    // Safety checks
-    await checkSafetyAndConfirm(worktreePath, force);
+    // Safety checks (returns updated force flag)
+    const effectiveForce = await checkSafetyAndConfirm(worktreePath, force);
 
     // Load config for hooks
     const config = await loadConfig();
@@ -326,7 +333,7 @@ wtman remove
     const removeResult = await spinner({
       message: "Removing worktree...",
       task: async () => {
-        await removeWorktree(worktreePath, force, mainTreePath);
+        await removeWorktree(worktreePath, effectiveForce, mainTreePath);
       },
     });
 
@@ -357,7 +364,7 @@ wtman remove
     // Handle branch deletion
     await handleBranchDeletion(
       branch,
-      force,
+      effectiveForce,
       deleteBranchOption,
       keepBranchOption,
       mainTreePath,
