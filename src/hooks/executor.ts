@@ -1,5 +1,4 @@
 import type { HookStep } from "../config/schema";
-import { spinner } from "../spinner";
 import { expandHookCommand, type HookContext } from "../template/expander";
 import { runStep } from "./runner";
 
@@ -61,18 +60,13 @@ export async function executeHooks(
     // Expand template variables in command
     const command = expandHookCommand(step.run, context);
 
-    // Execute step with spinner
-    const result = await spinner({
-      message: step.name,
-      task: async () => {
-        const stepResult = await runStep({
-          command,
-          workingDirectory,
-        });
-        if (!stepResult.success) {
-          throw stepResult.error || new Error("Command failed");
-        }
-      },
+    // Display step name as separator
+    console.log(`-- ${step.name} --`);
+
+    // Execute step
+    const result = await runStep({
+      command,
+      workingDirectory,
     });
 
     if (!result.success) {
