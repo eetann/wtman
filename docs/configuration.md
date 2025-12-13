@@ -125,7 +125,6 @@ Each step must have exactly one action (`run`, `copy`, `link`, `mkdir`, or `remo
 | `mkdir` | Create directories in worktree | `string` or `string[]` |
 | `remove` | Remove files/directories | `string` or `string[]` |
 
-> **Note**: `copy`, `link`, `mkdir`, and `remove` are planned features.
 
 #### Action Examples
 

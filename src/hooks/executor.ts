@@ -1,5 +1,10 @@
 import type { HookStep } from "../config/schema";
 import { expandHookCommand, type HookContext } from "../template/expander";
+import { copyAction } from "./actions/copy";
+import { normalizeTargets } from "./actions/index";
+import { linkAction } from "./actions/link";
+import { mkdirAction } from "./actions/mkdir";
+import { removeAction } from "./actions/remove";
 import { runStep } from "./runner";
 
 export type HookType =
@@ -7,6 +12,17 @@ export type HookType =
   | "post-worktree-add"
   | "pre-worktree-remove"
   | "post-worktree-remove";
+
+/**
+ * Check if worktree is available for the given hook type.
+ * - post-worktree-add: true (worktree is created)
+ * - pre-worktree-remove: true (worktree still exists)
+ * - pre-worktree-add: false (worktree not yet created)
+ * - post-worktree-remove: false (worktree is deleted)
+ */
+export function isWorktreeAvailable(hookType: HookType): boolean {
+  return hookType === "post-worktree-add" || hookType === "pre-worktree-remove";
+}
 
 export interface ExecuteHooksOptions {
   hookType: HookType;
@@ -47,27 +63,67 @@ export async function executeHooks(
   const { hookType, steps, context } = options;
 
   for (const step of steps) {
-    // Skip steps without run action (will be handled in Change 7)
-    if (!step.run) {
-      continue;
-    }
-
-    // Expand template variables in working directory
+    // Get default working directory for this hook type
     const workingDirectory = step["working-directory"]
       ? expandHookCommand(step["working-directory"], context)
       : getDefaultWorkingDirectory(hookType, context);
 
-    // Expand template variables in command
-    const command = expandHookCommand(step.run, context);
-
     // Display step name as separator
     console.log(`-- ${step.name} --`);
 
-    // Execute step
-    const result = await runStep({
-      command,
-      workingDirectory,
-    });
+    let result: { success: boolean; error?: Error };
+
+    if (step.run) {
+      // Run action (existing)
+      const command = expandHookCommand(step.run, context);
+      result = await runStep({
+        command,
+        workingDirectory,
+      });
+    } else if (step.mkdir) {
+      // Mkdir action
+      result = await mkdirAction(normalizeTargets(step.mkdir), {
+        workingDirectory,
+      });
+    } else if (step.remove) {
+      // Remove action
+      result = await removeAction(normalizeTargets(step.remove), {
+        workingDirectory,
+      });
+    } else if (step.copy) {
+      // Copy action - requires worktree
+      if (!isWorktreeAvailable(hookType)) {
+        return {
+          success: false,
+          failedStep: step.name,
+          error: new Error(
+            `Cannot use 'copy' action in ${hookType} hook (worktree does not exist)`,
+          ),
+        };
+      }
+      result = await copyAction(normalizeTargets(step.copy), {
+        originalPath: context.original.path,
+        worktreePath: context.worktree.path,
+      });
+    } else if (step.link) {
+      // Link action - requires worktree
+      if (!isWorktreeAvailable(hookType)) {
+        return {
+          success: false,
+          failedStep: step.name,
+          error: new Error(
+            `Cannot use 'link' action in ${hookType} hook (worktree does not exist)`,
+          ),
+        };
+      }
+      result = await linkAction(normalizeTargets(step.link), {
+        originalPath: context.original.path,
+        worktreePath: context.worktree.path,
+      });
+    } else {
+      // No recognized action, skip
+      continue;
+    }
 
     if (!result.success) {
       return {
