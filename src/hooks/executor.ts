@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { HookStep } from "../config/schema";
 import { expandHookCommand, type HookContext } from "../template/expander";
 import { copyAction } from "./actions/copy";
@@ -64,9 +65,21 @@ export async function executeHooks(
 
   for (const step of steps) {
     // Get default working directory for this hook type
-    const workingDirectory = step["working-directory"]
-      ? expandHookCommand(step["working-directory"], context)
-      : getDefaultWorkingDirectory(hookType, context);
+    const defaultWorkingDirectory = getDefaultWorkingDirectory(hookType, context);
+    let workingDirectory: string;
+
+    if (step["working-directory"]) {
+      const expandedWorkingDirectory = expandHookCommand(
+        step["working-directory"],
+        context,
+      );
+      // If relative path, resolve from default working directory
+      workingDirectory = path.isAbsolute(expandedWorkingDirectory)
+        ? expandedWorkingDirectory
+        : path.join(defaultWorkingDirectory, expandedWorkingDirectory);
+    } else {
+      workingDirectory = defaultWorkingDirectory;
+    }
 
     // Display step name as separator
     console.log(`-- ${step.name} --`);
