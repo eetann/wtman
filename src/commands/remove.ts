@@ -1,5 +1,5 @@
 import { basename, normalize, relative } from "node:path";
-import { confirm, select } from "@inquirer/prompts";
+import { confirm, search } from "@inquirer/prompts";
 import { define } from "gunshi";
 import { loadConfig } from "../config";
 import {
@@ -101,11 +101,18 @@ async function getTargetWorktree(
     };
   });
 
-  const selected = await select({
+  const selected = await search({
     message: "Select worktree to remove:",
-    choices,
-    theme: {
-      keybindings: ["vim", "emacs"],
+    source: async (input) => {
+      if (!input) {
+        return choices;
+      }
+      const lowerInput = input.toLowerCase();
+      return choices.filter(
+        (choice) =>
+          choice.name.toLowerCase().includes(lowerInput) ||
+          choice.value.branch?.toLowerCase().includes(lowerInput),
+      );
     },
   });
 
