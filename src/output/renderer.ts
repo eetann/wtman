@@ -30,6 +30,8 @@ export function renderTable(data: WorktreeDisplayInfo[]): void {
       { name: "path", title: "Path", alignment: "left" },
       { name: "branch", title: "Branch", alignment: "left" },
       { name: "current", title: "Current", alignment: "left" },
+      { name: "tags", title: "Tags", alignment: "left" },
+      { name: "description", title: "Description", alignment: "left" },
     ],
   });
 
@@ -38,6 +40,8 @@ export function renderTable(data: WorktreeDisplayInfo[]): void {
       path: item.path,
       branch: item.branch,
       current: item.isCurrent ? "(current)" : "-",
+      tags: item.tags || "-",
+      description: item.description || "-",
     });
   }
 

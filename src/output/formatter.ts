@@ -1,5 +1,6 @@
 import { normalize, relative } from "node:path";
 import type { WorktreeInfo } from "../git";
+import type { WorktreesMetadata } from "../metadata";
 
 /**
  * Format the worktree path for display.
@@ -60,17 +61,19 @@ export interface WorktreeDisplayInfo {
 export function formatWorktrees(
   worktrees: WorktreeInfo[],
   cwd: string,
+  metadata: WorktreesMetadata = {},
 ): WorktreeDisplayInfo[] {
   const normalizedCwd = normalize(cwd);
 
   return worktrees.map((info) => {
     const isCurrent = normalize(info.path) === normalizedCwd;
+    const worktreeMetadata = metadata[info.path];
     return {
       path: formatPath(info.path, cwd),
       branch: formatBranch(info),
       isCurrent,
-      tags: "",
-      description: "",
+      tags: worktreeMetadata?.tags?.join(", ") ?? "",
+      description: worktreeMetadata?.description ?? "",
     };
   });
 }

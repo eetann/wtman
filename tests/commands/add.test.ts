@@ -4,13 +4,15 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { cli } from "gunshi";
 import { addCommand } from "../../src/commands/add";
+import { loadMetadata } from "../../src/metadata";
 
 /**
  * Helper to create a test git repository with wtman config
@@ -182,5 +184,141 @@ describe("wtman add command", () => {
       errors.some((err) => err.includes("Failed to create worktree")),
     ).toBe(true);
     expect(exitCode).toBe(1);
+  });
+
+  test("saves description when --desc is specified", async () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    try {
+      await cli(
+        ["feature/with-desc", "--desc", "Test description"],
+        addCommand,
+        {
+          name: "wtman add",
+        },
+      );
+
+      const baseName = basename(testDir);
+      const worktreeDir = resolve(
+        testDir,
+        "..",
+        `${baseName}-feature-with-desc`,
+      );
+      createdWorktrees.push(worktreeDir);
+      // Use realpath to resolve symlinks (e.g., /var -> /private/var on macOS)
+      const expectedWorktreePath = realpathSync(worktreeDir);
+
+      // Verify metadata was saved
+      const metadata = await loadMetadata(testDir);
+      expect(metadata[expectedWorktreePath]).toBeDefined();
+      expect(metadata[expectedWorktreePath]?.description).toBe(
+        "Test description",
+      );
+      expect(metadata[expectedWorktreePath]?.tags).toEqual([]);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test("saves tags when --tag is specified", async () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    try {
+      await cli(["feature/with-tags", "--tag", "feature,urgent"], addCommand, {
+        name: "wtman add",
+      });
+
+      const baseName = basename(testDir);
+      const worktreeDir = resolve(
+        testDir,
+        "..",
+        `${baseName}-feature-with-tags`,
+      );
+      createdWorktrees.push(worktreeDir);
+      const expectedWorktreePath = realpathSync(worktreeDir);
+
+      // Verify metadata was saved
+      const metadata = await loadMetadata(testDir);
+      expect(metadata[expectedWorktreePath]).toBeDefined();
+      expect(metadata[expectedWorktreePath]?.description).toBe("");
+      expect(metadata[expectedWorktreePath]?.tags).toEqual([
+        "feature",
+        "urgent",
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test("saves both description and tags when both are specified", async () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    try {
+      await cli(
+        ["feature/with-both", "--desc", "Both options", "--tag", "test"],
+        addCommand,
+        { name: "wtman add" },
+      );
+
+      const baseName = basename(testDir);
+      const worktreeDir = resolve(
+        testDir,
+        "..",
+        `${baseName}-feature-with-both`,
+      );
+      createdWorktrees.push(worktreeDir);
+      const expectedWorktreePath = realpathSync(worktreeDir);
+
+      // Verify metadata was saved
+      const metadata = await loadMetadata(testDir);
+      expect(metadata[expectedWorktreePath]).toBeDefined();
+      expect(metadata[expectedWorktreePath]?.description).toBe("Both options");
+      expect(metadata[expectedWorktreePath]?.tags).toEqual(["test"]);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test("does not create metadata file when no options specified", async () => {
+    // Remove any existing metadata file first
+    const metadataPath = join(testDir, ".wtman", "worktrees.yaml");
+    rmSync(metadataPath, { force: true });
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    try {
+      await cli(["feature/no-metadata"], addCommand, {
+        name: "wtman add",
+      });
+
+      const baseName = basename(testDir);
+      const worktreeDir = resolve(
+        testDir,
+        "..",
+        `${baseName}-feature-no-metadata`,
+      );
+      createdWorktrees.push(worktreeDir);
+
+      // Verify metadata file was not created
+      expect(existsSync(metadataPath)).toBe(false);
+    } finally {
+      console.log = originalLog;
+    }
   });
 });

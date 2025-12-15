@@ -73,4 +73,23 @@ describe("renderTsv", () => {
 
     expect(lines[1]).toBe("/path/to/wt\t2024-01-15 fix: something\t-\t\t");
   });
+
+  test("includes tags and description in output", () => {
+    const data: WorktreeDisplayInfo[] = [
+      {
+        path: "../feature",
+        branch: "feature/x",
+        isCurrent: false,
+        tags: "feature, urgent",
+        description: "Working on feature X",
+      },
+    ];
+
+    const result = renderTsv(data);
+    const lines = result.split("\n");
+
+    expect(lines[1]).toBe(
+      "../feature\tfeature/x\t-\tfeature, urgent\tWorking on feature X",
+    );
+  });
 });

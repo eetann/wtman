@@ -69,4 +69,40 @@ describe("formatWorktrees", () => {
     expect(result[1]?.isCurrent).toBe(false);
     expect(result[1]?.path).toBe("../d");
   });
+
+  test("includes metadata when provided", () => {
+    const worktrees: WorktreeInfo[] = [
+      { path: "/a/b/c", branch: "main", isDetached: false },
+      { path: "/a/b/d", branch: "feature", isDetached: false },
+    ];
+    const cwd = "/a/b/c";
+    const metadata = {
+      "/a/b/d": {
+        description: "Feature branch",
+        tags: ["feature", "wip"],
+      },
+    };
+
+    const result = formatWorktrees(worktrees, cwd, metadata);
+
+    expect(result.length).toBe(2);
+    // First worktree has no metadata
+    expect(result[0]?.tags).toBe("");
+    expect(result[0]?.description).toBe("");
+    // Second worktree has metadata
+    expect(result[1]?.tags).toBe("feature, wip");
+    expect(result[1]?.description).toBe("Feature branch");
+  });
+
+  test("returns empty tags and description when no metadata", () => {
+    const worktrees: WorktreeInfo[] = [
+      { path: "/a/b/c", branch: "main", isDetached: false },
+    ];
+    const cwd = "/a/b/c";
+
+    const result = formatWorktrees(worktrees, cwd);
+
+    expect(result[0]?.tags).toBe("");
+    expect(result[0]?.description).toBe("");
+  });
 });

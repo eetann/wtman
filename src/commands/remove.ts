@@ -14,6 +14,11 @@ import {
   type WorktreeInfo,
 } from "../git";
 import { executeHooks } from "../hooks";
+import {
+  deleteWorktreeMetadata,
+  loadMetadata,
+  saveMetadata,
+} from "../metadata";
 import { spinner } from "../spinner";
 import type { HookContext } from "../template/expander";
 
@@ -366,6 +371,18 @@ wtman remove
         );
         process.exit(1);
       }
+    }
+
+    // Delete metadata for the removed worktree
+    try {
+      const metadata = await loadMetadata(mainTreePath);
+      const updated = deleteWorktreeMetadata(metadata, worktreePath);
+      await saveMetadata(mainTreePath, updated);
+    } catch (error) {
+      // Metadata deletion failure should not fail the worktree removal
+      console.error(
+        `Warning: Failed to delete metadata: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
 
     // Handle branch deletion

@@ -1,5 +1,6 @@
 import { define } from "gunshi";
-import { listWorktrees } from "../git";
+import { getMainTreePath, listWorktrees } from "../git";
+import { loadMetadata } from "../metadata";
 import { formatWorktrees, type OutputFormat, render } from "../output";
 
 const VALID_FORMATS = ["table", "json", "tsv"] as const;
@@ -29,9 +30,18 @@ export const listCommand = define({
     // Get worktree list
     const worktrees = listWorktrees();
 
+    // Load metadata
+    const mainTreePath = getMainTreePath();
+    let metadata = {};
+    try {
+      metadata = await loadMetadata(mainTreePath);
+    } catch {
+      // Ignore metadata load errors, just use empty metadata
+    }
+
     // Format for display
     const cwd = process.cwd();
-    const displayData = formatWorktrees(worktrees, cwd);
+    const displayData = formatWorktrees(worktrees, cwd, metadata);
 
     // Render output
     render(displayData, format as OutputFormat);

@@ -3,6 +3,7 @@ import { define } from "gunshi";
 import { loadConfig } from "../config";
 import { addWorktree, getMainTreePath } from "../git";
 import { executeHooks } from "../hooks";
+import { loadMetadata, saveMetadata, setWorktreeMetadata } from "../metadata";
 import {
   expandWorktreeTemplate,
   type HookContext,
@@ -18,9 +19,21 @@ export const addCommand = define({
       required: true,
       description: "Branch name for the new worktree",
     },
+    desc: {
+      type: "string",
+      short: "d",
+      description: "Description for the worktree",
+    },
+    tag: {
+      type: "string",
+      short: "t",
+      description: "Tags for the worktree (comma-separated)",
+    },
   },
   async run(ctx) {
     const branch = ctx.values.branch;
+    const desc = ctx.values.desc;
+    const tag = ctx.values.tag;
 
     // Load configuration
     const config = await loadConfig();
@@ -118,6 +131,29 @@ export const addCommand = define({
           `Hook failed at step "${postResult.failedStep}": ${postResult.error?.message ?? "Unknown error"}`,
         );
         process.exit(1);
+      }
+    }
+
+    // Save metadata if --desc or --tag is specified
+    if (desc || tag) {
+      try {
+        const metadata = await loadMetadata(mainTreePath);
+        const tags = tag
+          ? tag
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t.length > 0)
+          : [];
+        const updated = setWorktreeMetadata(metadata, worktreeAbsolutePath, {
+          description: desc ?? "",
+          tags,
+        });
+        await saveMetadata(mainTreePath, updated);
+      } catch (error) {
+        // Metadata save failure should not fail the worktree creation
+        console.error(
+          `Warning: Failed to save metadata: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
       }
     }
   },

@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cli } from "gunshi";
 import { removeCommand } from "../../src/commands/remove";
+import { loadMetadata, saveMetadata } from "../../src/metadata";
 
 /**
  * Helper to create a test git repository with wtman config
@@ -522,5 +523,59 @@ describe("wtman remove command", () => {
       true,
     );
     expect(exitCode).toBe(1);
+  });
+
+  test("removes metadata when worktree is removed (and no error when no metadata)", async () => {
+    // Create two worktrees: one with metadata, one without
+    const { worktreePath: wt1Path, branch: branch1 } = createWorktree(
+      testDir,
+      "test-branch-meta-1",
+    );
+    const realWt1Path = realpathSync(wt1Path);
+
+    const { worktreePath: wt2Path, branch: branch2 } = createWorktree(
+      testDir,
+      "test-branch-meta-2",
+    );
+
+    // Add metadata only for the first worktree
+    await saveMetadata(testDir, {
+      [realWt1Path]: {
+        description: "Worktree with metadata",
+        tags: ["test"],
+      },
+    });
+
+    // Stay in main worktree
+    process.chdir(testDir);
+
+    // Mock console.log
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    try {
+      // Remove worktree with metadata
+      await cli(["-b", branch1, "--force", "--delete-branch"], removeCommand, {
+        name: "wtman remove",
+      });
+
+      // Verify metadata was removed
+      const metadataAfter = await loadMetadata(testDir);
+      expect(metadataAfter[realWt1Path]).toBeUndefined();
+
+      // Remove worktree without metadata (should not error)
+      await cli(["-b", branch2, "--force", "--delete-branch"], removeCommand, {
+        name: "wtman remove",
+      });
+
+      // Both worktrees should be removed
+      expect(existsSync(wt1Path)).toBe(false);
+      expect(existsSync(wt2Path)).toBe(false);
+    } finally {
+      console.log = originalLog;
+    }
   });
 });
