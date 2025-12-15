@@ -13,7 +13,7 @@ Default to using Bun instead of Node.js.
 
 Use `bun test` to run tests.
 
-```ts#index.test.ts
+```ts#tests/foo.test.ts
 import { test, expect } from "bun:test";
 
 test("hello world", () => {
