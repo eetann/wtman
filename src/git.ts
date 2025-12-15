@@ -102,6 +102,42 @@ export function isMainWorktree(cwd?: string): boolean {
 export interface WorktreeInfo {
   path: string;
   branch: string;
+  isDetached: boolean;
+  commit?: string;
+  commitDate?: string;
+  commitMessage?: string;
+}
+
+/**
+ * Get commit information (date and message) for a given commit hash.
+ * @param commit - The commit hash
+ * @param cwd - Optional working directory
+ * @returns Object containing commitDate and commitMessage
+ */
+function getCommitInfo(
+  commit: string,
+  cwd?: string,
+): { commitDate: string; commitMessage: string } {
+  const options: ExecSyncOptionsWithStringEncoding = {
+    encoding: "utf-8",
+    cwd: cwd ?? process.cwd(),
+  };
+
+  const output = execSync(`git log -1 --format="%cs %s" ${commit}`, options)
+    .trim()
+    .replace(/^"/, "")
+    .replace(/"$/, "");
+
+  const spaceIndex = output.indexOf(" ");
+  const commitDate = output.slice(0, spaceIndex);
+  let commitMessage = output.slice(spaceIndex + 1);
+
+  // Truncate message to 20 characters
+  if (commitMessage.length > 20) {
+    commitMessage = `${commitMessage.slice(0, 17)}...`;
+  }
+
+  return { commitDate, commitMessage };
 }
 
 /**
@@ -123,17 +159,35 @@ export function listWorktrees(cwd?: string): WorktreeInfo[] {
     const lines = block.split("\n");
     let path = "";
     let branch = "";
+    let commit = "";
+    let isDetached = false;
 
     for (const line of lines) {
       if (line.startsWith("worktree ")) {
         path = line.slice("worktree ".length);
       } else if (line.startsWith("branch refs/heads/")) {
         branch = line.slice("branch refs/heads/".length);
+      } else if (line.startsWith("HEAD ")) {
+        commit = line.slice("HEAD ".length);
+      } else if (line === "detached") {
+        isDetached = true;
       }
     }
 
     if (path) {
-      worktrees.push({ path, branch });
+      if (isDetached && commit) {
+        const { commitDate, commitMessage } = getCommitInfo(commit, cwd);
+        worktrees.push({
+          path,
+          branch: "",
+          isDetached: true,
+          commit,
+          commitDate,
+          commitMessage,
+        });
+      } else {
+        worktrees.push({ path, branch, isDetached: false });
+      }
     }
   }
 

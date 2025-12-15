@@ -180,6 +180,42 @@ describe("listWorktrees", () => {
       execSync(`git worktree remove "${worktreePath}"`, { cwd: testDir });
     }
   });
+
+  test("returns isDetached=true for detached HEAD worktree", () => {
+    // Get current commit hash
+    const commitHash = execSync("git rev-parse HEAD", {
+      cwd: testDir,
+      encoding: "utf-8",
+    }).trim();
+
+    // Create a detached HEAD worktree
+    const worktreePath = join(testDir, "..", "detached-worktree");
+    execSync(`git worktree add --detach "${worktreePath}" ${commitHash}`, {
+      cwd: testDir,
+    });
+
+    try {
+      const worktrees = listWorktrees(testDir);
+      const detachedWorktree = worktrees.find(
+        (w) => normalize(w.path) === normalize(realpathSync(worktreePath)),
+      );
+
+      expect(detachedWorktree).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: in test
+      expect(detachedWorktree!.isDetached).toBe(true);
+      // biome-ignore lint/style/noNonNullAssertion: in test
+      expect(detachedWorktree!.branch).toBe("");
+      // biome-ignore lint/style/noNonNullAssertion: in test
+      expect(detachedWorktree!.commit).toBe(commitHash);
+      // biome-ignore lint/style/noNonNullAssertion: in test
+      expect(detachedWorktree!.commitDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // biome-ignore lint/style/noNonNullAssertion: in test
+      expect(detachedWorktree!.commitMessage).toBe("initial commit");
+    } finally {
+      // Clean up
+      execSync(`git worktree remove "${worktreePath}"`, { cwd: testDir });
+    }
+  });
 });
 
 describe("getWorktreeByBranchName", () => {
