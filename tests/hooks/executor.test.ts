@@ -73,9 +73,10 @@ describe("executeHooks", () => {
 
   test("uses worktree path as default for post-worktree-add", async () => {
     // post-worktree-add should run in worktree directory (/tmp)
+    // Use pattern matching because /tmp is symlinked to /private/tmp on macOS
     const result = await executeHooks({
       hookType: "post-worktree-add",
-      steps: [{ name: "Check pwd", run: "test $(pwd) = /private/tmp" }],
+      steps: [{ name: "Check pwd", run: "[[ $(pwd) == */tmp ]]" }],
       context: mockContext,
     });
 
@@ -84,9 +85,10 @@ describe("executeHooks", () => {
 
   test("uses worktree path as default for pre-worktree-remove", async () => {
     // pre-worktree-remove should run in worktree directory (/tmp)
+    // Use pattern matching because /tmp is symlinked to /private/tmp on macOS
     const result = await executeHooks({
       hookType: "pre-worktree-remove",
-      steps: [{ name: "Check pwd", run: "test $(pwd) = /private/tmp" }],
+      steps: [{ name: "Check pwd", run: "[[ $(pwd) == */tmp ]]" }],
       context: mockContext,
     });
 
