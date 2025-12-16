@@ -65,7 +65,10 @@ export async function executeHooks(
 
   for (const step of steps) {
     // Get default working directory for this hook type
-    const defaultWorkingDirectory = getDefaultWorkingDirectory(hookType, context);
+    const defaultWorkingDirectory = getDefaultWorkingDirectory(
+      hookType,
+      context,
+    );
     let workingDirectory: string;
 
     if (step["working-directory"]) {
