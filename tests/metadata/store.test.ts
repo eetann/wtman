@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   deleteWorktreeMetadata,
+  filterWorktreesByTags,
   getWorktreeMetadata,
   loadMetadata,
+  parseTags,
   saveMetadata,
   setWorktreeMetadata,
 } from "../../src/metadata/store";
@@ -207,5 +209,78 @@ describe("deleteWorktreeMetadata", () => {
     const result = deleteWorktreeMetadata(metadata, "/path/to/non-existent");
 
     expect(result).toEqual(metadata);
+  });
+});
+
+describe("parseTags", () => {
+  test("parses comma-separated string into array", () => {
+    const result = parseTags("foo,bar,baz");
+    expect(result).toEqual(["foo", "bar", "baz"]);
+  });
+
+  test("trims whitespace from tags", () => {
+    const result = parseTags("foo , bar , baz");
+    expect(result).toEqual(["foo", "bar", "baz"]);
+  });
+
+  test("filters out empty strings", () => {
+    const result = parseTags("foo,,bar,");
+    expect(result).toEqual(["foo", "bar"]);
+  });
+
+  test("returns single tag for non-comma string", () => {
+    const result = parseTags("single");
+    expect(result).toEqual(["single"]);
+  });
+
+  test("returns empty array for empty string", () => {
+    const result = parseTags("");
+    expect(result).toEqual([]);
+  });
+});
+
+describe("filterWorktreesByTags", () => {
+  const metadata = {
+    "/path/to/wt1": {
+      description: "Worktree 1",
+      tags: ["review", "urgent"],
+    },
+    "/path/to/wt2": {
+      description: "Worktree 2",
+      tags: ["review"],
+    },
+    "/path/to/wt3": {
+      description: "Worktree 3",
+      tags: ["feature"],
+    },
+    "/path/to/wt4": {
+      description: "Worktree 4",
+      tags: [],
+    },
+  };
+
+  test("filters by single tag", () => {
+    const result = filterWorktreesByTags(metadata, ["review"]);
+    expect(result).toEqual(["/path/to/wt1", "/path/to/wt2"]);
+  });
+
+  test("filters by multiple tags with AND condition", () => {
+    const result = filterWorktreesByTags(metadata, ["review", "urgent"]);
+    expect(result).toEqual(["/path/to/wt1"]);
+  });
+
+  test("returns empty array when no match", () => {
+    const result = filterWorktreesByTags(metadata, ["nonexistent"]);
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array for empty tags input", () => {
+    const result = filterWorktreesByTags(metadata, []);
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array for empty metadata", () => {
+    const result = filterWorktreesByTags({}, ["review"]);
+    expect(result).toEqual([]);
   });
 });

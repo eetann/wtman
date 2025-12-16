@@ -3,7 +3,12 @@ import { define } from "gunshi";
 import { loadConfig } from "../config";
 import { addWorktree, getMainTreePath } from "../git";
 import { executeHooks } from "../hooks";
-import { loadMetadata, saveMetadata, setWorktreeMetadata } from "../metadata";
+import {
+  loadMetadata,
+  parseTags,
+  saveMetadata,
+  setWorktreeMetadata,
+} from "../metadata";
 import {
   expandWorktreeTemplate,
   type HookContext,
@@ -138,12 +143,7 @@ export const addCommand = define({
     if (desc || tag) {
       try {
         const metadata = await loadMetadata(mainTreePath);
-        const tags = tag
-          ? tag
-              .split(",")
-              .map((t) => t.trim())
-              .filter((t) => t.length > 0)
-          : [];
+        const tags = tag ? parseTags(tag) : [];
         const updated = setWorktreeMetadata(metadata, worktreeAbsolutePath, {
           description: desc ?? "",
           tags,

@@ -578,4 +578,111 @@ describe("wtman remove command", () => {
       console.log = originalLog;
     }
   });
+
+  test("removes multiple worktrees by tag with --force", async () => {
+    // Create two worktrees with the same tag
+    const { worktreePath: wt1Path, branch: branch1 } = createWorktree(
+      testDir,
+      "test-branch-tag-1",
+    );
+    const realWt1Path = realpathSync(wt1Path);
+
+    const { worktreePath: wt2Path, branch: branch2 } = createWorktree(
+      testDir,
+      "test-branch-tag-2",
+    );
+    const realWt2Path = realpathSync(wt2Path);
+
+    // Create a worktree without the tag (should not be removed)
+    const { worktreePath: wt3Path } = createWorktree(
+      testDir,
+      "test-branch-no-tag",
+    );
+
+    // Add metadata with tag
+    await saveMetadata(testDir, {
+      [realWt1Path]: {
+        description: "First tagged worktree",
+        tags: ["batch-test"],
+      },
+      [realWt2Path]: {
+        description: "Second tagged worktree",
+        tags: ["batch-test"],
+      },
+    });
+
+    // Stay in main worktree
+    process.chdir(testDir);
+
+    // Mock console.log
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    try {
+      await cli(
+        ["--tag", "batch-test", "--force", "--delete-branch"],
+        removeCommand,
+        {
+          name: "wtman remove",
+        },
+      );
+
+      // Verify tagged worktrees were removed
+      expect(existsSync(wt1Path)).toBe(false);
+      expect(existsSync(wt2Path)).toBe(false);
+
+      // Verify untagged worktree still exists
+      expect(existsSync(wt3Path)).toBe(true);
+
+      // Verify branches were deleted
+      const branches = execSync("git branch", {
+        cwd: testDir,
+        encoding: "utf-8",
+      });
+      expect(branches).not.toContain(branch1);
+      expect(branches).not.toContain(branch2);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test("shows message when no worktrees found with tag", async () => {
+    // Stay in main worktree
+    process.chdir(testDir);
+
+    // Mock console.log
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = mock((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    // Mock process.exit
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = mock((code?: number) => {
+      exitCode = code;
+      throw new Error("process.exit called");
+    }) as never;
+
+    try {
+      await cli(["--tag", "nonexistent-tag", "--force"], removeCommand, {
+        name: "wtman remove",
+      });
+    } catch {
+      // Expected
+    } finally {
+      console.log = originalLog;
+      process.exit = originalExit;
+    }
+
+    // Verify message
+    expect(
+      logs.some((log) => log.includes("No worktrees found with tag:")),
+    ).toBe(true);
+    expect(exitCode).toBe(0);
+  });
 });

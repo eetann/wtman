@@ -93,3 +93,34 @@ export function deleteWorktreeMetadata(
   const { [worktreePath]: _, ...rest } = metadata;
   return rest;
 }
+
+/**
+ * Parse a comma-separated tag string into an array of tags.
+ * Trims whitespace and filters out empty strings.
+ */
+export function parseTags(tagString: string): string[] {
+  return tagString
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * Filter worktrees by tags (AND condition).
+ * Returns paths of worktrees that have ALL specified tags.
+ */
+export function filterWorktreesByTags(
+  metadata: WorktreesMetadata,
+  tags: string[],
+): string[] {
+  if (tags.length === 0) {
+    return [];
+  }
+
+  return Object.entries(metadata)
+    .filter(([_, data]) => {
+      const worktreeTags = data.tags ?? [];
+      return tags.every((tag) => worktreeTags.includes(tag));
+    })
+    .map(([path]) => path);
+}
