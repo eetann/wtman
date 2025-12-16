@@ -1,3 +1,7 @@
+<p align="center">
+    <a href="https://www.npmjs.com/package/wtman"><img src="https://img.shields.io/npm/v/wtman?color=CB0200" alt="link to npm.js" /></a>
+</p>
+
 # wtman
 
 **wtman** is a CLI tool for managing Git worktrees more conveniently.
