@@ -156,5 +156,6 @@ export const addCommand = define({
         );
       }
     }
+    console.log(`\nTo enter the worktree, run:\n\ncd ${worktreePath}\n`);
   },
 });
