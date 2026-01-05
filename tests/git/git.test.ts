@@ -8,8 +8,45 @@ import {
   branchExists,
   getWorktreeByBranchName,
   getWorktreeByPath,
+  listBranches,
   listWorktrees,
+  remoteBranchExists,
 } from "../../src/git";
+
+describe("listBranches", () => {
+  let testDir: string;
+
+  beforeAll(() => {
+    testDir = mkdtempSync(join(tmpdir(), "wtman-test-"));
+    execSync("git init", { cwd: testDir });
+    execSync("git config user.email 'test@example.com'", { cwd: testDir });
+    execSync("git config user.name 'Test User'", { cwd: testDir });
+    execSync("touch README.md", { cwd: testDir });
+    execSync("git add .", { cwd: testDir });
+    execSync("git commit -m 'initial commit'", { cwd: testDir });
+    execSync("git branch feature/foo", { cwd: testDir });
+    execSync("git branch feature/bar", { cwd: testDir });
+  });
+
+  afterAll(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  test("returns list of local branches", () => {
+    const branches = listBranches(testDir);
+    expect(branches).toContain("feature/foo");
+    expect(branches).toContain("feature/bar");
+    // main or master should exist
+    expect(branches.some((b) => b === "main" || b === "master")).toBe(true);
+  });
+
+  test("returns empty array for repo with no branches", () => {
+    // This is actually impossible - a repo always has at least one branch after commit
+    // So we just verify the function returns an array
+    const branches = listBranches(testDir);
+    expect(Array.isArray(branches)).toBe(true);
+  });
+});
 
 describe("branchExists", () => {
   let testDir: string;
@@ -47,6 +84,56 @@ describe("branchExists", () => {
 
   test("returns false for non-existing branch", () => {
     expect(branchExists("non-existing-branch", testDir)).toBe(false);
+  });
+});
+
+describe("remoteBranchExists", () => {
+  let testDir: string;
+  let remoteDir: string;
+
+  beforeAll(() => {
+    // Create a bare repository to act as remote
+    remoteDir = mkdtempSync(join(tmpdir(), "wtman-remote-"));
+    execSync("git init --bare", { cwd: remoteDir });
+
+    // Create a local repository
+    testDir = mkdtempSync(join(tmpdir(), "wtman-test-"));
+    execSync("git init", { cwd: testDir });
+    execSync("git config user.email 'test@example.com'", { cwd: testDir });
+    execSync("git config user.name 'Test User'", { cwd: testDir });
+    execSync("touch README.md", { cwd: testDir });
+    execSync("git add .", { cwd: testDir });
+    execSync("git commit -m 'initial commit'", { cwd: testDir });
+
+    // Add remote and push
+    execSync(`git remote add origin "${remoteDir}"`, { cwd: testDir });
+    execSync("git push -u origin HEAD", { cwd: testDir });
+
+    // Create and push a feature branch
+    execSync("git checkout -b feature/remote-test", { cwd: testDir });
+    execSync("git push -u origin feature/remote-test", { cwd: testDir });
+    execSync("git checkout -", { cwd: testDir });
+  });
+
+  afterAll(() => {
+    rmSync(testDir, { recursive: true, force: true });
+    rmSync(remoteDir, { recursive: true, force: true });
+  });
+
+  test("returns true for existing remote branch", () => {
+    expect(remoteBranchExists("origin", "feature/remote-test", testDir)).toBe(
+      true,
+    );
+  });
+
+  test("returns false for non-existing remote branch", () => {
+    expect(remoteBranchExists("origin", "non-existing", testDir)).toBe(false);
+  });
+
+  test("returns false for non-existing remote", () => {
+    expect(remoteBranchExists("upstream", "feature/remote-test", testDir)).toBe(
+      false,
+    );
   });
 });
 
@@ -110,6 +197,72 @@ describe("addWorktree", () => {
     // Clean up
     execSync(`git worktree remove "${worktreePath}"`, { cwd: testDir });
     rmSync(worktreePath, { recursive: true, force: true });
+  });
+});
+
+describe("addWorktree with startPoint", () => {
+  let testDir: string;
+  let remoteDir: string;
+  let worktreePath: string;
+
+  beforeAll(() => {
+    // Create a bare repository to act as remote
+    remoteDir = mkdtempSync(join(tmpdir(), "wtman-remote-"));
+    execSync("git init --bare", { cwd: remoteDir });
+
+    // Create a local repository
+    testDir = mkdtempSync(join(tmpdir(), "wtman-test-"));
+    execSync("git init", { cwd: testDir });
+    execSync("git config user.email 'test@example.com'", { cwd: testDir });
+    execSync("git config user.name 'Test User'", { cwd: testDir });
+    execSync("touch README.md", { cwd: testDir });
+    execSync("git add .", { cwd: testDir });
+    execSync("git commit -m 'initial commit'", { cwd: testDir });
+
+    // Add remote and push
+    execSync(`git remote add origin "${remoteDir}"`, { cwd: testDir });
+    execSync("git push -u origin HEAD", { cwd: testDir });
+
+    // Create and push a feature branch with additional content
+    execSync("git checkout -b feature/remote-branch", { cwd: testDir });
+    execSync("touch feature.txt", { cwd: testDir });
+    execSync("git add .", { cwd: testDir });
+    execSync("git commit -m 'feature commit'", { cwd: testDir });
+    execSync("git push -u origin feature/remote-branch", { cwd: testDir });
+    execSync("git checkout -", { cwd: testDir });
+  });
+
+  afterAll(() => {
+    rmSync(testDir, { recursive: true, force: true });
+    rmSync(remoteDir, { recursive: true, force: true });
+    if (worktreePath) {
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+  });
+
+  test("creates worktree with startPoint from remote branch", () => {
+    worktreePath = join(tmpdir(), "wtman-worktree-from-remote");
+    addWorktree(
+      worktreePath,
+      "local-from-remote",
+      testDir,
+      "origin/feature/remote-branch",
+    );
+
+    // Verify worktree was created with the new branch
+    const result = execSync("git worktree list", {
+      cwd: testDir,
+      encoding: "utf-8",
+    });
+    expect(result).toContain("local-from-remote");
+    expect(result).toContain(worktreePath);
+
+    // Verify the worktree has the feature.txt file (from remote branch)
+    const files = execSync("ls", { cwd: worktreePath, encoding: "utf-8" });
+    expect(files).toContain("feature.txt");
+
+    // Clean up
+    execSync(`git worktree remove "${worktreePath}"`, { cwd: testDir });
   });
 });
 

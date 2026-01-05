@@ -82,7 +82,7 @@ describe("wtman add command", () => {
     });
 
     try {
-      await cli(["feature/new-feature"], addCommand, {
+      await cli(["-b", "feature/new-feature"], addCommand, {
         name: "wtman add",
       });
 
@@ -126,7 +126,7 @@ describe("wtman add command", () => {
     });
 
     try {
-      await cli(["existing-branch"], addCommand, {
+      await cli(["-b", "existing-branch"], addCommand, {
         name: "wtman add",
       });
 
@@ -169,7 +169,7 @@ describe("wtman add command", () => {
 
     try {
       // Try to create worktree with already used branch
-      await cli(["existing-branch"], addCommand, {
+      await cli(["-b", "existing-branch"], addCommand, {
         name: "wtman add",
       });
     } catch {
@@ -195,7 +195,7 @@ describe("wtman add command", () => {
 
     try {
       await cli(
-        ["feature/with-desc", "--desc", "Test description"],
+        ["-b", "feature/with-desc", "--desc", "Test description"],
         addCommand,
         {
           name: "wtman add",
@@ -232,9 +232,13 @@ describe("wtman add command", () => {
     });
 
     try {
-      await cli(["feature/with-tags", "--tag", "feature,urgent"], addCommand, {
-        name: "wtman add",
-      });
+      await cli(
+        ["-b", "feature/with-tags", "--tag", "feature,urgent"],
+        addCommand,
+        {
+          name: "wtman add",
+        },
+      );
 
       const baseName = basename(testDir);
       const worktreeDir = resolve(
@@ -267,7 +271,7 @@ describe("wtman add command", () => {
 
     try {
       await cli(
-        ["feature/with-both", "--desc", "Both options", "--tag", "test"],
+        ["-b", "feature/with-both", "--desc", "Both options", "--tag", "test"],
         addCommand,
         { name: "wtman add" },
       );
@@ -303,7 +307,7 @@ describe("wtman add command", () => {
     });
 
     try {
-      await cli(["feature/no-metadata"], addCommand, {
+      await cli(["-b", "feature/no-metadata"], addCommand, {
         name: "wtman add",
       });
 

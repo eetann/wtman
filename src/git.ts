@@ -27,6 +27,29 @@ export function getMainTreePath(): string {
 }
 
 /**
+ * List all local branches in the repository.
+ * @param cwd - Optional working directory (defaults to process.cwd())
+ * @returns Array of branch names
+ */
+export function listBranches(cwd?: string): string[] {
+  const options: ExecSyncOptionsWithStringEncoding = {
+    encoding: "utf-8",
+    cwd: cwd ?? process.cwd(),
+  };
+
+  const output = execSync(
+    'git branch --format="%(refname:short)"',
+    options,
+  ).trim();
+
+  if (!output) {
+    return [];
+  }
+
+  return output.split("\n");
+}
+
+/**
  * Check if a branch exists in the repository.
  * @param branch - The branch name to check
  * @param cwd - Optional working directory (defaults to process.cwd())
@@ -50,13 +73,50 @@ export function branchExists(branch: string, cwd?: string): boolean {
 }
 
 /**
+ * Check if a remote branch exists in the repository.
+ * @param remote - The remote name (e.g., "origin")
+ * @param branch - The branch name to check
+ * @param cwd - Optional working directory (defaults to process.cwd())
+ * @returns true if the remote branch exists, false otherwise
+ */
+export function remoteBranchExists(
+  remote: string,
+  branch: string,
+  cwd?: string,
+): boolean {
+  const options: ExecSyncOptionsWithStringEncoding = {
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  };
+  if (cwd) {
+    options.cwd = cwd;
+  }
+
+  try {
+    execSync(
+      `git show-ref --verify --quiet refs/remotes/${remote}/${branch}`,
+      options,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Add a new worktree.
  * If the branch does not exist, it will be created.
  * @param path - The path where the worktree will be created
  * @param branch - The branch name for the worktree
  * @param cwd - Optional working directory (defaults to process.cwd())
+ * @param startPoint - Optional start point for creating the branch (e.g., "origin/feature")
  */
-export function addWorktree(path: string, branch: string, cwd?: string): void {
+export function addWorktree(
+  path: string,
+  branch: string,
+  cwd?: string,
+  startPoint?: string,
+): void {
   const options: ExecSyncOptionsWithStringEncoding = {
     encoding: "utf-8",
     stdio: ["pipe", "pipe", "pipe"],
@@ -70,8 +130,14 @@ export function addWorktree(path: string, branch: string, cwd?: string): void {
   if (exists) {
     // Branch exists: use existing branch
     execSync(`git worktree add "${path}" "${branch}"`, options);
+  } else if (startPoint) {
+    // Branch doesn't exist but startPoint specified: create from startPoint
+    execSync(
+      `git worktree add -b "${branch}" "${path}" "${startPoint}"`,
+      options,
+    );
   } else {
-    // Branch doesn't exist: create new branch
+    // Branch doesn't exist: create new branch from current HEAD
     execSync(`git worktree add -b "${branch}" "${path}"`, options);
   }
 }

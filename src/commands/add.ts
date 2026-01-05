@@ -1,7 +1,15 @@
-import { basename, resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
+import { input, search } from "@inquirer/prompts";
 import { define } from "gunshi";
 import { loadConfig } from "../config";
-import { addWorktree, getMainTreePath } from "../git";
+import {
+  addWorktree,
+  getMainTreePath,
+  getWorktreeByBranchName,
+  listBranches,
+  listWorktrees,
+  remoteBranchExists,
+} from "../git";
 import { executeHooks } from "../hooks";
 import {
   loadMetadata,
@@ -9,20 +17,131 @@ import {
   saveMetadata,
   setWorktreeMetadata,
 } from "../metadata";
+import { formatPath } from "../output/formatter";
 import {
+  expandTemplate,
   expandWorktreeTemplate,
   type HookContext,
+  transformBranch,
   type WorktreeTemplateContext,
 } from "../template";
+
+interface BranchSpec {
+  remote?: string;
+  branch: string;
+}
+
+const CREATE_NEW_BRANCH = "__CREATE_NEW_BRANCH__";
+
+/**
+ * Parse branch specification string.
+ * Supports "origin:feature/foo" format for remote branches.
+ */
+function parseBranchSpec(spec: string): BranchSpec {
+  const colonIndex = spec.indexOf(":");
+  if (colonIndex === -1) {
+    return { branch: spec };
+  }
+  return {
+    remote: spec.slice(0, colonIndex),
+    branch: spec.slice(colonIndex + 1),
+  };
+}
+
+/**
+ * Interactive branch selection.
+ * Returns the selected branch name, or exits if user selects existing worktree.
+ */
+async function selectBranch(mainTreePath: string): Promise<string> {
+  const branches = listBranches(mainTreePath);
+  const worktrees = listWorktrees(mainTreePath);
+
+  // Build choices
+  interface BranchChoice {
+    name: string;
+    value: string;
+    hasWorktree: boolean;
+    worktreePath?: string;
+  }
+
+  const choices: BranchChoice[] = [
+    {
+      name: "+ Create new branch",
+      value: CREATE_NEW_BRANCH,
+      hasWorktree: false,
+    },
+  ];
+
+  for (const branch of branches) {
+    const worktree = getWorktreeByBranchName(branch, worktrees);
+    if (worktree) {
+      const relativePath = formatPath(worktree.path, mainTreePath);
+      choices.push({
+        name: `✗ ${branch} (${relativePath})`,
+        value: branch,
+        hasWorktree: true,
+        worktreePath: worktree.path,
+      });
+    } else {
+      choices.push({
+        name: branch,
+        value: branch,
+        hasWorktree: false,
+      });
+    }
+  }
+
+  const selected = await search({
+    message: "Select branch:",
+    source: async (input) => {
+      if (!input) {
+        return choices;
+      }
+      const lowerInput = input.toLowerCase();
+      return choices.filter((choice) =>
+        choice.name.toLowerCase().includes(lowerInput),
+      );
+    },
+  });
+
+  // Handle "Create new branch"
+  if (selected === CREATE_NEW_BRANCH) {
+    const newBranch = await input({
+      message: "Enter new branch name:",
+    });
+    if (!newBranch.trim()) {
+      console.error("Branch name cannot be empty");
+      process.exit(1);
+    }
+    return newBranch.trim();
+  }
+
+  // Check if selected branch has existing worktree
+  const selectedChoice = choices.find((c) => c.value === selected);
+  if (selectedChoice?.hasWorktree && selectedChoice.worktreePath) {
+    const relativePath = relative(mainTreePath, selectedChoice.worktreePath);
+    console.log("Worktree already exists. To enter, run:\n");
+    console.log(`cd ${relativePath}\n`);
+    process.exit(0);
+  }
+
+  return selected;
+}
 
 export const addCommand = define({
   name: "add",
   description: "Add a new worktree",
   args: {
-    branch: {
-      type: "positional",
-      required: true,
-      description: "Branch name for the new worktree",
+    "branch-name": {
+      type: "string",
+      short: "b",
+      description:
+        "Branch name for the new worktree (supports remote:branch format)",
+    },
+    "worktree-path": {
+      type: "string",
+      short: "w",
+      description: "Custom worktree path (overrides template)",
     },
     desc: {
       type: "string",
@@ -36,7 +155,8 @@ export const addCommand = define({
     },
   },
   async run(ctx) {
-    const branch = ctx.values.branch;
+    const branchNameOption = ctx.values["branch-name"];
+    const worktreePathOption = ctx.values["worktree-path"];
     const desc = ctx.values.desc;
     const tag = ctx.values.tag;
 
@@ -46,29 +166,62 @@ export const addCommand = define({
     // Get main repository path
     const mainTreePath = getMainTreePath();
 
-    // Build template context
-    const templateContext: WorktreeTemplateContext = {
-      original: {
-        path: mainTreePath,
-        basename: basename(mainTreePath),
-      },
-      worktree: {
-        branch,
-      },
-    };
+    // Determine branch and startPoint
+    let branch: string;
+    let startPoint: string | undefined;
 
-    // Expand template to get worktree path (relative to main repo)
-    const worktreePath = expandWorktreeTemplate(
-      config.worktree.template,
-      templateContext,
-      config.worktree.separator,
-    );
+    if (branchNameOption) {
+      // Parse branch specification (supports "origin:feature/foo" format)
+      const spec = parseBranchSpec(branchNameOption);
+      branch = spec.branch;
+
+      if (spec.remote) {
+        // Validate remote branch exists
+        if (!remoteBranchExists(spec.remote, spec.branch, mainTreePath)) {
+          console.error(
+            `Remote branch not found: ${spec.remote}/${spec.branch}`,
+          );
+          process.exit(1);
+        }
+        startPoint = `${spec.remote}/${spec.branch}`;
+      }
+    } else {
+      // Interactive branch selection
+      branch = await selectBranch(mainTreePath);
+    }
+
+    // Determine worktree path
+    let worktreePath: string;
+    if (worktreePathOption) {
+      // Custom path specified - use expandTemplate with variables
+      const variables: Record<string, string> = {
+        "original.path": mainTreePath,
+        "original.basename": basename(mainTreePath),
+        "worktree.branch": transformBranch(branch, config.worktree.separator),
+      };
+      worktreePath = expandTemplate(worktreePathOption, variables);
+    } else {
+      // Use template from config
+      const templateContext: WorktreeTemplateContext = {
+        original: {
+          path: mainTreePath,
+          basename: basename(mainTreePath),
+        },
+        worktree: {
+          branch,
+        },
+      };
+      worktreePath = expandWorktreeTemplate(
+        config.worktree.template,
+        templateContext,
+        config.worktree.separator,
+      );
+    }
 
     // Resolve absolute path for worktree
     const worktreeAbsolutePath = resolve(mainTreePath, worktreePath);
 
-    // Build pre-hook context (worktree.path/basename not available yet)
-    // For pre-worktree-add, we use the expected path even though worktree doesn't exist yet
+    // Build pre-hook context
     const preHookContext: HookContext = {
       original: {
         path: mainTreePath,
@@ -99,7 +252,7 @@ export const addCommand = define({
 
     try {
       // Create worktree (execute from main repo directory)
-      addWorktree(worktreePath, branch, mainTreePath);
+      addWorktree(worktreePath, branch, mainTreePath, startPoint);
       console.log(`Created worktree at: ${worktreePath}`);
     } catch (error) {
       if (error instanceof Error) {
