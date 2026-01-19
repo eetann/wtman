@@ -4,6 +4,7 @@ import { define } from "gunshi";
 import { loadConfig } from "../config";
 import {
   addWorktree,
+  fetchRemoteBranch,
   getMainTreePath,
   getWorktreeByBranchName,
   listBranches,
@@ -176,6 +177,14 @@ export const addCommand = define({
       branch = spec.branch;
 
       if (spec.remote) {
+        // Fetch the remote branch first to ensure we have the latest refs
+        try {
+          fetchRemoteBranch(spec.remote, spec.branch, mainTreePath);
+        } catch {
+          // Fetch failed - continue to check if branch exists locally
+          // (might be offline or branch doesn't exist)
+        }
+
         // Validate remote branch exists
         if (!remoteBranchExists(spec.remote, spec.branch, mainTreePath)) {
           console.error(

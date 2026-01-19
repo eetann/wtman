@@ -401,3 +401,24 @@ export async function deleteBranch(
     cwd: cwd ?? process.cwd(),
   });
 }
+
+/**
+ * Fetch a specific branch from a remote.
+ * @param remote - The remote name (e.g., "origin")
+ * @param branch - The branch name to fetch
+ * @param cwd - Optional working directory (defaults to process.cwd())
+ */
+export function fetchRemoteBranch(
+  remote: string,
+  branch: string,
+  cwd?: string,
+): void {
+  const options: ExecSyncOptionsWithStringEncoding = {
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  };
+  if (cwd) {
+    options.cwd = cwd;
+  }
+  execSync(`git fetch ${remote} ${branch}`, options);
+}
